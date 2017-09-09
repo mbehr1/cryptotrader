@@ -1,13 +1,13 @@
 #include <QCoreApplication>
 #include <QtWebSockets/QWebSocket>
 
-#include "exchangebitfinex.h"
+#include "engine.h"
 
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
 
-    ExchangeBitfinex exchange;
+    Engine engine;
 
     return a.exec();
 }

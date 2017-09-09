@@ -10,8 +10,22 @@ CONFIG -= app_bundle
 
 TEMPLATE = app
 
+include($$PWD/lib/QtTelegramBot/QtTelegramBot.pri)
+
 SOURCES += main.cpp \
-    exchangebitfinex.cpp
+    exchangebitfinex.cpp \
+    providercandles.cpp \
+    channel.cpp \
+    engine.cpp \
+    strategyrsinoloss.cpp \
+    channelaccountinfo.cpp
 
 HEADERS += \
-    exchangebitfinex.h
+    exchangebitfinex.h \
+    providercandles.h \
+    channel.h \
+    engine.h \
+    strategyrsinoloss.h \
+    channelaccountinfo.h
+
+LIBS += -lta_lib
