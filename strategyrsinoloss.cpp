@@ -42,11 +42,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
         // todo check whether this generates a maker fee (0.1% trade fee instead of 0.2%)
         // Maker fees are paid when you add liquidity to our order book by placing a limit order under the ticker price for buy and above the ticker price for sell.
     }
-    qDebug() << __PRETTY_FUNCTION__ << rsi << curPrice << _waitForFundsUpdate;
-    qDebug() << " valueBought=" << _valueBought;
-    qDebug() << " valueSold=" << _valueSold;
-    qDebug() << " current val=" << _persFundAmount*curPrice;
-    qDebug() << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
+    qDebug() << __PRETTY_FUNCTION__ << rsi << curPrice << _waitForFundsUpdate << " valueBought=" << _valueBought << " valueSold=" << _valueSold << " current val=" << _persFundAmount*curPrice << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
     // is rsi valid?
     if (rsi < 0.0) return;
 
