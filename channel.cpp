@@ -207,7 +207,7 @@ bool ChannelTrades::handleChannelData(const QJsonArray &data)
                     double amount = a[2].toDouble();
                     double price = a[3].toDouble();
                     handleSingleEntry(id, mts, amount, price);
-                    printTrades();
+                    //printTrades();
                     emit dataUpdated();
                 } else qWarning() << __PRETTY_FUNCTION__ << "expected array. got" << teData;
             } else

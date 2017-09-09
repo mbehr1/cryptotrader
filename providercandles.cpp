@@ -53,7 +53,7 @@ void ProviderCandles::channelDataUpdated()
     //qDebug() << __PRETTY_FUNCTION__ << tempCandles.size();
     _candles = tempCandles;
 
-    printCandles(false);
+    //printCandles(false);
 
     emit dataUpdated();
 }

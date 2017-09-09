@@ -53,7 +53,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
     }
 
     // start telegram bot:
-    _telegramBot = std::make_shared<Telegram::Bot>(QString(TELEGRAM_TOKEN), true, 500, 4 );
+    _telegramBot = std::make_shared<Telegram::Bot>(telegramToken, true, 500, 1 );
     connect(&(*_telegramBot), &Telegram::Bot::message, this,
             &Engine::onNewMessage);
 

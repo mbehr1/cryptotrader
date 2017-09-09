@@ -1,3 +1,4 @@
+#include <cassert>
 #include <QDebug>
 #include <QJsonValue>
 #include <QJsonArray>
@@ -20,7 +21,7 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
     const QJsonValue &actionValue = data.at(1);
     if (actionValue.isString()) {
         auto action = actionValue.toString();
-        if (action.compare("oc")==0) //order completed
+        if (action.compare("oc")==0) //order completed/cancel
         { // QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
             const QJsonValue &v3 = data.at(2);
             if (v3.isArray()) {
@@ -32,7 +33,22 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                 qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status;
                 emit orderCompleted(cid, amount, price, status);
             } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
-        }
+        } else
+            if (action.compare("tu")==0) {
+                // QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
+                // QJsonArray([0,"tu",[64277048,"tBTCUSD",1504958784000,3740665404,-0.115391,4359.7,"EXCHANGE LIMIT",4359.7,-1,-1.00614029,"USD"]])
+                if (data.at(2).isArray()) {
+                    long long id = data.at(2).toArray()[0].toDouble(); // toInt is too small
+                    auto it = _trades.find(id);
+                    if (it != _trades.end()) {
+                        // update
+                        it->second.operator=(data);
+                    } else {
+                        // new
+                        _trades.insert(std::make_pair(id, TradeItem(data)));
+                    }
+                } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
+            }
     } else {
         if (actionValue.isArray()) {
 
@@ -41,23 +57,53 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
     return true;
 }
 
+ChannelAccountInfo::TradeItem::TradeItem(const QJsonArray &data)
+{
+    operator =(data);
+}
+
+ChannelAccountInfo::TradeItem &ChannelAccountInfo::TradeItem::operator =(const QJsonArray &data)
+{ // QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
+    if (data.at(2).isArray()) {
+        const QJsonArray &a = data.at(2).toArray();
+        _id = a[0].toDouble();
+        _pair = a[1].toString();
+        _orderId = a[3].toDouble();
+        _amount = a[4].toDouble();
+        _price = a[5].toDouble();
+        if (a.count()>=11) {
+            _fee = a[9].toDouble();
+            _feeCur = a[10].toString();
+            if (_amount != 0.0)
+                qDebug() << "TradeItem fee=" << _fee << _feeCur
+                         << " for amount " << _amount << _price
+                         << " is" << ((_fee*100.0)/_amount) << "%"; // at sell wrong currency!
+        } else {
+            _fee = 0.0;
+            _feeCur = QString();
+        }
+    } else assert(false);
+    qDebug() << "TradeItem" << _id << _pair << _orderId << _amount << _price << _fee << _feeCur;
+    return *this;
+}
+
 /*
  *
- 1st step: "n" cid (1001) "SUCCESS" -> order accepted
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"n",[null,"on-req",null,null,[3728702632,null,1001,null,null,null,0.116163,null,"EXCHANGE LIMIT",null,null,null,null,null,null,null,4304.3,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting exchange limit buy order for 0.116163 BTC."]])
+ 1st step: "n" "notification" cid (1001) "SUCCESS" -> order accepted
+ QJsonArray([0,"n",[null,"on-req",null,null,[3728702632,null,1001,null,null,null,0.116163,null,"EXCHANGE LIMIT",null,null,null,null,null,null,null,4304.3,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting exchange limit buy order for 0.116163 BTC."]])
  2nd step: "on" order new -> can be ignored
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"on",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124088,0.116163,0.116163,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,4304.3,0,0,0,null,null,null,0,0,0]])
+ QJsonArray([0,"on",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124088,0.116163,0.116163,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,4304.3,0,0,0,null,null,null,0,0,0]])
  ... wu wallet update USD (new abs value)
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"wu",["exchange","USD",412.06187584,0,null]])
+ QJsonArray([0,"wu",["exchange","USD",412.06187584,0,null]])
  ... wu wallet update BTC (new abs value)
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"wu",["exchange","BTC",0.236123,0,null]])
- 3rd step: "oc" order completed -> cid(1001) "EXECUTED @ ..." 0.116163BTC
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"te",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1]])
+ QJsonArray([0,"wu",["exchange","BTC",0.236123,0,null]])
+ 3rd step: "oc" order change -> cid(1001) "EXECUTED @ ..." 0.116163BTC
+ QJsonArray&) account info: QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
+ QJsonArray([0,"te",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1]])
  5th step: tu trade updated -> trade fee (-0.00023233 BTC) 2%
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
+ QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
  6th step: wu BTC new abs value (after trade fee) =
-void ExchangeBitfinex::handleChannelData(const QJsonArray&) account info: QJsonArray([0,"wu",["exchange","BTC",0.23589067,0,null]])
+ QJsonArray([0,"wu",["exchange","BTC",0.23589067,0,null]])
 
 
 "buying 0.117678 shares for avg 4248.9 / limit 4248.9 / cur 4247.4"

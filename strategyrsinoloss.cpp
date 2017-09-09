@@ -39,6 +39,8 @@ void StrategyRSINoLoss::onCandlesUpdated()
     if (_channelBook) {
         gotAvgAskPrice = _channelBook->getPrices(true, buyAmount - _persFundAmount, avgAskPrice, maxAskPrice);
         gotAvgBidPrice = _channelBook->getPrices(false, _persFundAmount, avgBidPrice, minBidPrice);
+        // todo check whether this generates a maker fee (0.1% trade fee instead of 0.2%)
+        // Maker fees are paid when you add liquidity to our order book by placing a limit order under the ticker price for buy and above the ticker price for sell.
     }
     qDebug() << __PRETTY_FUNCTION__ << rsi << curPrice << _waitForFundsUpdate;
     qDebug() << " valueBought=" << _valueBought;
