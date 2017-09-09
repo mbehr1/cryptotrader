@@ -62,6 +62,11 @@ Engine::Engine(QObject *parent) : QObject(parent)
     connect(&(*_telegramBot), &Telegram::Bot::message, this,
             &Engine::onNewMessage);
 
+    // say hello to all subscribers:
+    for (auto &s : _telegramSubscribers) {
+        _telegramBot->sendMessage(s, QString("welcome back. cryptotrader just started."));
+    }
+
     connect(&_exchange, SIGNAL(orderCompleted(int,double,double,QString)),
             this, SLOT(onOrderCompleted(int,double,double,QString)));
     connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
@@ -70,6 +75,16 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
     _exchange.setAuthData(bitfinexKey, bitfinexSKey);
     bitfinexSKey.fill(QChar('x'), bitfinexSKey.length()); // overwrite in memory
+}
+
+Engine::~Engine()
+{
+    // say goodbye
+    if (_telegramBot)
+        for (auto &s : _telegramSubscribers) {
+            _telegramBot->sendMessage(s, QString("goodbye! cryptotrader is stopping."));
+        }
+
 }
 
 void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
