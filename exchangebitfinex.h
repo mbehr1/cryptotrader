@@ -35,6 +35,7 @@ signals:
     void channelDataUpdated(int channelId);
     void newChannelSubscribed(std::shared_ptr<Channel> channel);
     void orderCompleted(int cid, double amount, double price, QString status);
+    void channelTimeout(int channelId);
 
 private Q_SLOTS:
     void onConnected();
@@ -43,6 +44,7 @@ private Q_SLOTS:
     void onSslErrors(const QList<QSslError> &errors);
     void connectWS();
     void onOrderCompleted(int cid, double amount, double price, QString status);
+    void onChannelTimeout(int id);
 
 private:
     bool sendAuth(const QString &apiKey, const QString &skey);

@@ -67,6 +67,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _telegramBot->sendMessage(s, QString("welcome back. cryptotrader just started."));
     }
 
+    connect(&_exchange, SIGNAL(channelTimeout(int)), this, SLOT(onChannelTimeout(int)));
+
     connect(&_exchange, SIGNAL(orderCompleted(int,double,double,QString)),
             this, SLOT(onOrderCompleted(int,double,double,QString)));
     connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
@@ -110,6 +112,17 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
 void Engine::onCandlesUpdated()
 {
     qDebug() << __PRETTY_FUNCTION__ << _providerCandles->getRSI14();
+}
+
+void Engine::onChannelTimeout(int channelId)
+{
+    qWarning() << __PRETTY_FUNCTION__ << channelId;
+    if (_telegramBot) {
+        for (auto &s : _telegramSubscribers) {
+            _telegramBot->sendMessage(s, QString("warning! Channel %1 has timeout!")
+                                      .arg(channelId));
+        }
+    }
 }
 
 void Engine::onTradeAdvice(bool sell, double amount, double price)

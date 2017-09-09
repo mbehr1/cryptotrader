@@ -22,6 +22,8 @@ ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
 
     connect(&_accountInfoChannel, SIGNAL(orderCompleted(int,double,double,QString)),
             this, SLOT(onOrderCompleted(int,double,double,QString)));
+    connect(&_accountInfoChannel, SIGNAL(timeout(int)),
+            this, SLOT(onChannelTimeout(int)));
 
     connect(&_checkConnectionTimer, SIGNAL(timeout()), this, SLOT(connectWS()));
     connect(&_ws, &QWebSocket::connected, this, &ExchangeBitfinex::onConnected);
@@ -175,6 +177,14 @@ void ExchangeBitfinex::onDisconnected()
     _checkConnectionTimer.start(1000); // todo check reconnect behaviour
 }
 
+void ExchangeBitfinex::onChannelTimeout(int id)
+{
+    qWarning() << __PRETTY_FUNCTION__ << id;
+    // todo handle this here? resubscribe? check connection? disconnect/reconnect?
+    // forward
+    emit channelTimeout(id);
+}
+
 void ExchangeBitfinex::onTextMessageReceived(QString message)
 {
     //qDebug() << __PRETTY_FUNCTION__ << message;
@@ -325,7 +335,7 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
                     ptr = std::make_shared<Channel>(channelId, channel, symbol, pair);
             _subscribedChannels.insert(std::make_pair(channelId, ptr));
             emit newChannelSubscribed(ptr);
-
+            connect(&(*ptr), SIGNAL(onChannelTimeout(int)), this, SLOT(onChannelTimeout(int)));
         } else
             if (channelId == 0) { // account info
                 qDebug() << __PRETTY_FUNCTION__ << "account info" << obj;
