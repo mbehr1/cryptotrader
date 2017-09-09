@@ -34,7 +34,7 @@ Channel::~Channel()
 
 bool Channel::handleChannelData(const QJsonArray &data)
 {
-    qDebug() << __FUNCTION__ << data;
+    //qDebug() << __FUNCTION__ << data;
     assert(_id == data.at(0).toInt());
     _lastMsg = QDateTime::currentDateTime(); // or UTC?
     // todo we might only handle ping alive msgs here. The rest needs to be done by overriden members
