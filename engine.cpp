@@ -35,6 +35,11 @@ Engine::Engine(QObject *parent) : QObject(parent)
         set.sync();
     }
 
+    // read subscribers:
+    QStringList subscribers = set.value("TelegramSubscribers", QVariant(QStringList())).toStringList();
+    for (auto subs : subscribers)
+        _telegramSubscribers.insert(subs.toInt());
+
     QString bitfinexKey = set.value("BitfinexApiKey", QString("")).toString();
     if (!bitfinexKey.length()) {
         bitfinexKey = queryFromStdin("bitfinex api key");
@@ -139,6 +144,12 @@ void Engine::onNewMessage(Telegram::Message msg)
             if (_telegramSubscribers.find(msg.from.id) == _telegramSubscribers.end())
             {
                 _telegramSubscribers.insert(msg.from.id);
+                // persist subscribers:
+                QSettings set("mcbehr.de", "cryptotrader_engine");
+                QStringList subscribers;
+                for (auto subs : _telegramSubscribers)
+                    subscribers << QString("%1").arg(subs);
+                set.setValue("TelegramSubscribers", subscribers);
                 _telegramBot->sendMessage(msg.from.id, "subscribed. Welcome!");
             } else {
                 _telegramBot->sendMessage(msg.from.id, "Already subscribed. I'll send you trade order info.");

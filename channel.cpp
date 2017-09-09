@@ -261,6 +261,10 @@ void ChannelTrades::handleSingleEntry(const int &id, const long long &mts, const
     }
     TradesItem item(id, mts, amount, price);
     _trades.insert(std::make_pair(id, item));
+    // avoid keeping too many
+    while (_trades.size()>1000) {
+        _trades.erase(std::prev(_trades.end())); // todo better use circular_buffer!
+    }
 }
 
 void ChannelTrades::printTrades() const
