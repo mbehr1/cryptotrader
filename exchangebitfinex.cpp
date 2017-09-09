@@ -183,6 +183,8 @@ void ExchangeBitfinex::onChannelTimeout(int id)
     // todo handle this here? resubscribe? check connection? disconnect/reconnect?
     // forward
     emit channelTimeout(id);
+    if (id == 0 && !_isAuth)
+        _accountInfoChannel._isSubscribed = false;
 }
 
 void ExchangeBitfinex::onTextMessageReceived(QString message)

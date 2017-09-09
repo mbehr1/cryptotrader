@@ -182,7 +182,23 @@ void Engine::onNewMessage(Telegram::Message msg)
             } else {
                 _telegramBot->sendMessage(msg.from.id, "Already subscribed. I'll send you trade order info.");
             }
-        } else
+        } else if (msg.string.compare("unsubscribe")==0) {
+            auto it = _telegramSubscribers.find(msg.from.id);
+            if (it == _telegramSubscribers.end())
+            {
+                _telegramBot->sendMessage(msg.from.id, "You're not subscribed yet.");
+            } else {
+                _telegramSubscribers.erase(it);
+                // persist subscribers:
+                QSettings set("mcbehr.de", "cryptotrader_engine");
+                QStringList subscribers;
+                for (auto subs : _telegramSubscribers)
+                    subscribers << QString("%1").arg(subs);
+                set.setValue("TelegramSubscribers", subscribers);
+                _telegramBot->sendMessage(msg.from.id, "unsubscribed. Good bye!");
+            }
+        }
+        else
         if (msg.string.compare("status")==0) {
             QString status = _strategy->getStatusMsg();
             _telegramBot->sendMessage(msg.from.id, status,false, false, msg.id);
