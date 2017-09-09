@@ -18,7 +18,7 @@ ChannelAccountInfo::~ChannelAccountInfo()
 bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
 {
     if (Channel::handleChannelData(data)) {
-        qDebug() << __PRETTY_FUNCTION__ << data;
+        //qDebug() << __PRETTY_FUNCTION__ << data;
         const QJsonValue &actionValue = data.at(1);
         if (actionValue.isString()) {
             auto action = actionValue.toString();
@@ -50,8 +50,9 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             _trades.insert(std::make_pair(id, TradeItem(data)));
                         }
                     } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
-                }
+                } else qDebug() << __PRETTY_FUNCTION__ << data;
         } else {
+            qDebug() << __PRETTY_FUNCTION__ << data;
             if (actionValue.isArray()) {
 
             }
