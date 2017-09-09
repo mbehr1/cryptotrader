@@ -17,43 +17,46 @@ ChannelAccountInfo::~ChannelAccountInfo()
 
 bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
 {
-    qDebug() << __PRETTY_FUNCTION__ << data;
-    const QJsonValue &actionValue = data.at(1);
-    if (actionValue.isString()) {
-        auto action = actionValue.toString();
-        if (action.compare("oc")==0) //order completed/cancel
-        { // QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
-            const QJsonValue &v3 = data.at(2);
-            if (v3.isArray()) {
-                const QJsonArray &a = v3.toArray();
-                int cid = a[2].toInt();
-                double amount = a[7].toDouble();
-                double price = a[17].toDouble();
-                QString status = a[13].toString();
-                qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status;
-                emit orderCompleted(cid, amount, price, status);
-            } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
-        } else
-            if (action.compare("tu")==0) {
-                // QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
-                // QJsonArray([0,"tu",[64277048,"tBTCUSD",1504958784000,3740665404,-0.115391,4359.7,"EXCHANGE LIMIT",4359.7,-1,-1.00614029,"USD"]])
-                if (data.at(2).isArray()) {
-                    long long id = data.at(2).toArray()[0].toDouble(); // toInt is too small
-                    auto it = _trades.find(id);
-                    if (it != _trades.end()) {
-                        // update
-                        it->second.operator=(data);
-                    } else {
-                        // new
-                        _trades.insert(std::make_pair(id, TradeItem(data)));
-                    }
+    if (Channel::handleChannelData(data)) {
+        qDebug() << __PRETTY_FUNCTION__ << data;
+        const QJsonValue &actionValue = data.at(1);
+        if (actionValue.isString()) {
+            auto action = actionValue.toString();
+            if (action.compare("hb")==0) {} else // _lastMsg already updated
+            if (action.compare("oc")==0) //order completed/cancel
+            { // QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
+                const QJsonValue &v3 = data.at(2);
+                if (v3.isArray()) {
+                    const QJsonArray &a = v3.toArray();
+                    int cid = a[2].toInt();
+                    double amount = a[7].toDouble();
+                    double price = a[17].toDouble();
+                    QString status = a[13].toString();
+                    qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status;
+                    emit orderCompleted(cid, amount, price, status);
                 } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
-            }
-    } else {
-        if (actionValue.isArray()) {
+            } else
+                if (action.compare("tu")==0) {
+                    // QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
+                    // QJsonArray([0,"tu",[64277048,"tBTCUSD",1504958784000,3740665404,-0.115391,4359.7,"EXCHANGE LIMIT",4359.7,-1,-1.00614029,"USD"]])
+                    if (data.at(2).isArray()) {
+                        long long id = data.at(2).toArray()[0].toDouble(); // toInt is too small
+                        auto it = _trades.find(id);
+                        if (it != _trades.end()) {
+                            // update
+                            it->second.operator=(data);
+                        } else {
+                            // new
+                            _trades.insert(std::make_pair(id, TradeItem(data)));
+                        }
+                    } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
+                }
+        } else {
+            if (actionValue.isArray()) {
 
+            }
         }
-    }
+    } else return false;
     return true;
 }
 

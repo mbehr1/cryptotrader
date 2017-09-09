@@ -1,4 +1,5 @@
 #include <cassert>
+#include <chrono>
 #include <QDebug>
 #include <QJsonArray>
 
@@ -8,6 +9,22 @@ Channel::Channel(int id, const QString &name, const QString &symbol, const QStri
     _isSubscribed(subscribed), _id(id), _channel(name), _symbol(symbol), _pair(pair)
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _channel << _symbol << _pair << _isSubscribed;
+    startTimer(1000); // each sec
+}
+
+void Channel::timerEvent(QTimerEvent *event)
+{
+    (void)event;
+    // check for last message time if is subscribed
+    if (_isSubscribed) {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        qint64 last = _lastMsg.toMSecsSinceEpoch();
+        if (now-last > MAX_MS_SINCE_LAST) {
+            // timeout
+            qWarning() << "channel (" << _id << ") seems stuck!";
+            emit timeout(_id);
+        }
+    }
 }
 
 Channel::~Channel()
@@ -19,6 +36,7 @@ bool Channel::handleChannelData(const QJsonArray &data)
 {
     qDebug() << __FUNCTION__ << data;
     assert(_id == data.at(0).toInt());
+    _lastMsg = QDateTime::currentDateTime(); // or UTC?
     // todo we might only handle ping alive msgs here. The rest needs to be done by overriden members
     // for now simply return true;
     return true;
@@ -64,11 +82,14 @@ ChannelBooks::~ChannelBooks()
 
 bool ChannelBooks::handleChannelData(const QJsonArray &data)
 {
-    if (true) { // todo do we need this? Channel::handleChannelData(data)) {
+    if (Channel::handleChannelData(data)) {
         const QJsonValue &actionValue = data.at(1);
         if (actionValue.isString()) {
             auto action = actionValue.toString();
-            qDebug() << "book" << _id << action;
+            if (action.compare("hb")==0)
+            { // ignore, _lastMsg member already updated via Channel::handle...
+            } else
+                qDebug() << "book" << _id << action;
         } else
             if (actionValue.isArray()) {
                 // array -> assume update messages
@@ -193,7 +214,7 @@ ChannelTrades::~ChannelTrades()
 
 bool ChannelTrades::handleChannelData(const QJsonArray &data)
 {
-    if (true) { // todo do we need this? Channel::handleChannelData(data)) {
+    if (Channel::handleChannelData(data)) {
         const QJsonValue &actionValue = data.at(1);
         if (actionValue.isString()) {
             auto action = actionValue.toString();
@@ -213,7 +234,9 @@ bool ChannelTrades::handleChannelData(const QJsonArray &data)
             } else
                 if (action.compare("tu")==0){} // noop
                 else
-                    qDebug() << "trades" << _id << action << data;
+                    if (action.compare("hb")==0){} // noop _lastMsg already updated
+                    else
+                        qDebug() << "trades" << _id << action << data;
         } else
             if (actionValue.isArray()) {
                 // array -> assume update messages

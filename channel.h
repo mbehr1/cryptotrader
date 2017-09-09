@@ -1,6 +1,7 @@
 #ifndef CHANNEL_H
 #define CHANNEL_H
 #include <QObject>
+#include <QDateTime>
 
 class ExchangeBitfinex;
 class Engine;
@@ -15,9 +16,12 @@ public:
 
 signals:
     void dataUpdated();
+    void timeout(int id);
 public slots:
 
 protected:
+    void timerEvent(QTimerEvent *event) override;
+    const qint64 MAX_MS_SINCE_LAST = 10000; // 10s
     friend class ExchangeBitfinex;
     friend class Engine;
     bool _isSubscribed;
@@ -25,6 +29,7 @@ protected:
     QString _channel;
     QString _symbol;
     QString _pair;
+    QDateTime _lastMsg;
 };
 
 class ChannelBooks : public Channel
