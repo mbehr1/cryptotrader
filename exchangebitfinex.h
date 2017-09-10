@@ -36,6 +36,7 @@ signals:
     void newChannelSubscribed(std::shared_ptr<Channel> channel);
     void orderCompleted(int cid, double amount, double price, QString status);
     void channelTimeout(int channelId);
+    void subscriberMsg(QString msg);
 
 private Q_SLOTS:
     void onConnected();

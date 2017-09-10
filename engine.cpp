@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <cassert>
 #include <iostream>
 #include <QDebug>
 #include <QSettings>
@@ -67,6 +68,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _telegramBot->sendMessage(s, QString("welcome back. cryptotrader just started."));
     }
 
+
+    connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
     connect(&_exchange, SIGNAL(channelTimeout(int)), this, SLOT(onChannelTimeout(int)));
 
     connect(&_exchange, SIGNAL(orderCompleted(int,double,double,QString)),
@@ -124,6 +127,17 @@ void Engine::onChannelTimeout(int channelId)
         }
     }
 }
+
+void Engine::onSubscriberMsg(QString msg)
+{
+    qWarning() << __PRETTY_FUNCTION__ << msg;
+    if (_telegramBot) {
+        for (auto &s : _telegramSubscribers) {
+            _telegramBot->sendMessage(s, msg);
+        }
+    }
+}
+
 
 void Engine::onTradeAdvice(bool sell, double amount, double price)
 {

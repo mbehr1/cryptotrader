@@ -281,6 +281,7 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
 {
     qDebug() << __PRETTY_FUNCTION__ << obj;
+    subscriberMsg(QJsonDocument(obj).toJson());
     assert(obj["event"]=="info");
 
     // need to send auth

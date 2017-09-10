@@ -28,6 +28,7 @@ public slots:
     void onOrderCompleted(int cid, double amount, double price, QString status);
     void onNewMessage(Telegram::Message msg);
     void onChannelTimeout(int channelId);
+    void onSubscriberMsg(QString msg);
 protected:
     ExchangeBitfinex _exchange;
     std::shared_ptr<ProviderCandles> _providerCandles;
