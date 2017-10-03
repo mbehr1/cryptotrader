@@ -6,6 +6,7 @@
 #include <QString>
 #include <QTextStream>
 #include "engine.h"
+#include "signal.h"
 
 QString queryFromStdin(const QString &query)
 {
@@ -216,6 +217,11 @@ void Engine::onNewMessage(Telegram::Message msg)
         if (msg.string.compare("status")==0) {
             QString status = _strategy->getStatusMsg();
             _telegramBot->sendMessage(msg.from.id, status,false, false, msg.id);
+        }
+        else
+        if (msg.string.compare("restart")==0) {
+            _telegramBot->sendMessage(msg.from.id, "restarting with SIGHUP",false, false, msg.id);
+            raise(SIGHUP);
         }
     }
 }
