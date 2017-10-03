@@ -71,7 +71,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
 
     connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
-    connect(&_exchange, SIGNAL(channelTimeout(int)), this, SLOT(onChannelTimeout(int)));
+    connect(&_exchange, SIGNAL(channelTimeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
 
     connect(&_exchange, SIGNAL(orderCompleted(int,double,double,QString)),
             this, SLOT(onOrderCompleted(int,double,double,QString)));
@@ -118,13 +118,13 @@ void Engine::onCandlesUpdated()
     qDebug() << __PRETTY_FUNCTION__ << _providerCandles->getRSI14();
 }
 
-void Engine::onChannelTimeout(int channelId)
+void Engine::onChannelTimeout(int channelId, bool isTimeout)
 {
     qWarning() << __PRETTY_FUNCTION__ << channelId;
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("warning! Channel %1 has timeout!")
-                                      .arg(channelId));
+            _telegramBot->sendMessage(s, QString("warning! Channel %1 has %2!")
+                                      .arg(channelId).arg(isTimeout ? "timeout" : "recovered"));
         }
     }
 }

@@ -16,7 +16,7 @@ public:
 
 signals:
     void dataUpdated();
-    void timeout(int id);
+    void timeout(int id, bool isTimeout);
 public slots:
 
 protected:
@@ -25,6 +25,7 @@ protected:
     friend class ExchangeBitfinex;
     friend class Engine;
     bool _isSubscribed;
+    bool _isTimeout;
     int _id;
     QString _channel;
     QString _symbol;

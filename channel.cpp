@@ -6,7 +6,7 @@
 #include "channel.h"
 
 Channel::Channel(int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed) :
-    _isSubscribed(subscribed), _id(id), _channel(name), _symbol(symbol), _pair(pair)
+    _isSubscribed(subscribed), _isTimeout(false), _id(id), _channel(name), _symbol(symbol), _pair(pair)
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _channel << _symbol << _pair << _isSubscribed;
     startTimer(1000); // each sec
@@ -20,9 +20,11 @@ void Channel::timerEvent(QTimerEvent *event)
         qint64 now = QDateTime::currentMSecsSinceEpoch();
         qint64 last = _lastMsg.toMSecsSinceEpoch();
         if (now-last > MAX_MS_SINCE_LAST) {
-            // timeout
-            qWarning() << "channel (" << _id << ") seems stuck!";
-            emit timeout(_id);
+            if (!_isTimeout) {
+                _isTimeout = true;
+                qWarning() << "channel (" << _id << ") seems stuck!";
+                emit timeout(_id, _isTimeout);
+            }
         }
     }
 }
@@ -37,6 +39,11 @@ bool Channel::handleChannelData(const QJsonArray &data)
     //qDebug() << __FUNCTION__ << data;
     assert(_id == data.at(0).toInt());
     _lastMsg = QDateTime::currentDateTime(); // or UTC?
+    if (_isTimeout) {
+        _isTimeout = false;
+        qWarning() << "channel (" << _id << ") seems back!";
+        emit timeout(_id, _isTimeout);
+    }
     // todo we might only handle ping alive msgs here. The rest needs to be done by overriden members
     // for now simply return true;
     return true;

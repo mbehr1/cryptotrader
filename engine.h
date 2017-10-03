@@ -27,7 +27,7 @@ public slots:
     void onTradeAdvice(bool sell, double amount, double price);
     void onOrderCompleted(int cid, double amount, double price, QString status);
     void onNewMessage(Telegram::Message msg);
-    void onChannelTimeout(int channelId);
+    void onChannelTimeout(int channelId, bool isTimeout);
     void onSubscriberMsg(QString msg);
 protected:
     ExchangeBitfinex _exchange;
