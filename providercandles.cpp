@@ -51,7 +51,8 @@ void ProviderCandles::channelDataUpdated()
         //qDebug() << "time_point tp is: " << ctime(&tt);
     }
     //qDebug() << __PRETTY_FUNCTION__ << tempCandles.size();
-    _candles = tempCandles;
+    //_candles = tempCandles;
+    _candles.insert(tempCandles.begin(), tempCandles.end()); // we grow indefinetly for now (todo)
 
     //printCandles(false);
 
@@ -80,7 +81,7 @@ double ProviderCandles::getRSI14() const
 {
     double rsi=-1.0;
 
-    if (_candles.size()<15) return rsi;
+    if (_candles.size()<15) return rsi - (_candles.size());
 
     TA_Real closePrices[15];
     TA_Real out[15];
