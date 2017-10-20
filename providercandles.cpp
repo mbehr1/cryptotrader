@@ -51,12 +51,19 @@ void ProviderCandles::channelDataUpdated()
         //qDebug() << "time_point tp is: " << ctime(&tt);
     }
     //qDebug() << __PRETTY_FUNCTION__ << tempCandles.size();
-    //_candles = tempCandles;
-    // we need to use the newly calculated values not the prev ones
-    tempCandles.insert(_candles.begin(), _candles.end()); // we grow indefinetly for now (todo)
-    _candles = tempCandles;
 
-    //printCandles(false);
+    // we need to update the (max 20) tempCandles in _candles
+    // go through all of them:
+    for (auto &cp : tempCandles) {
+        auto it = _candles.find(cp.first);
+        if (it != _candles.end()) {
+            // update _candles.
+            (*it).second = cp.second;
+        } else
+            _candles.insert(cp);// we grow indefinetly for now (todo)
+    }
+
+    //printCandles(true);
 
     emit dataUpdated();
 }
