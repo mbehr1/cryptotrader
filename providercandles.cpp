@@ -52,7 +52,9 @@ void ProviderCandles::channelDataUpdated()
     }
     //qDebug() << __PRETTY_FUNCTION__ << tempCandles.size();
     //_candles = tempCandles;
-    _candles.insert(tempCandles.begin(), tempCandles.end()); // we grow indefinetly for now (todo)
+    // we need to use the newly calculated values not the prev ones
+    tempCandles.insert(_candles.begin(), _candles.end()); // we grow indefinetly for now (todo)
+    _candles = tempCandles;
 
     //printCandles(false);
 
