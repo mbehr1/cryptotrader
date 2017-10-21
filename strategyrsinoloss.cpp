@@ -71,7 +71,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
     if (_persFundAmount >= _minFundToSell ) {
         _lastPrice = avgBidPrice;
         // do we have enough margin yet?
-        qDebug() << _id << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
+        //qDebug() << _id << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
         if (avgBidPrice > (_persPrice * _marginFactor) && rsi > _rsiHold) {
             // sell all
             _waitForFundsUpdate = true;
