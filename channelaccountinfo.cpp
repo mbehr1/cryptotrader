@@ -78,10 +78,17 @@ ChannelAccountInfo::TradeItem &ChannelAccountInfo::TradeItem::operator =(const Q
         if (a.count()>=11) {
             _fee = a[9].toDouble();
             _feeCur = a[10].toString();
-            if (_amount != 0.0)
+            if (_amount < 0.0) { // sell
+                if (_amount*_price != 0.0)
                 qDebug() << "TradeItem fee=" << _fee << _feeCur
                          << " for amount " << _amount << _price
-                         << " is" << ((_fee*100.0)/_amount) << "%"; // at sell wrong currency!
+                         << " is" << ((_fee*100.0)/(_amount*_price)) << "% for sell";
+            }
+            if (_amount > 0.0) { // buy
+                qDebug() << "TradeItem fee=" << _fee << _feeCur
+                         << " for amount " << _amount << _price
+                         << " is" << ((_fee*100.0)/_amount) << "% for buy";
+            }
         } else {
             _fee = 0.0;
             _feeCur = QString();
@@ -90,6 +97,8 @@ ChannelAccountInfo::TradeItem &ChannelAccountInfo::TradeItem::operator =(const Q
     qDebug() << "TradeItem" << _id << _pair << _orderId << _amount << _price << _fee << _feeCur;
     return *this;
 }
+
+
 
 /*
  *
@@ -104,7 +113,7 @@ ChannelAccountInfo::TradeItem &ChannelAccountInfo::TradeItem::operator =(const Q
  3rd step: "oc" order change -> cid(1001) "EXECUTED @ ..." 0.116163BTC
  QJsonArray&) account info: QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
  QJsonArray([0,"te",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1]])
- 5th step: tu trade updated -> trade fee (-0.00023233 BTC) 2%
+ 5th step: tu trade updated -> trade fee (-0.00023233 BTC) 0.2%
  QJsonArray([0,"tu",[63996276,"tBTCUSD",1504893124000,3728702632,0.116163,4304.26318325,"EXCHANGE LIMIT",4304.3,-1,-0.00023233,"BTC"]])
  6th step: wu BTC new abs value (after trade fee) =
  QJsonArray([0,"wu",["exchange","BTC",0.23589067,0,null]])
