@@ -15,6 +15,17 @@ ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
     QObject(parent), _isConnected(false), _isAuth(false), _checkConnectionTimer(this),
     _settings("mcbehr.de", "cryptotrader_exchangebitfinex")
 {
+
+    // parse json test
+    if(0){
+        QString msg (
+         "[0,\"oc\",[4513036628,null,1089,\"tBTCUSD\",1508594741965,1508594781709,0,-0.0491981,\"EXCHANGE LIMIT\""
+         ",null,null,null,0,\"EXECUTED @ 6131.3(-0.05)\",null,null,6131.3,6131.3,0,0,null,null,null,0,0,0]]"
+         "[0,\"wu\",[\"exchange\",\"USD\",1832.71277469,0,null]]"
+         "[0,\"wu\",[\"exchange\",\"USD\",1832.71277468,0,null]]");
+        parseJson(msg);
+    }
+
     // load settings:
     _settings.beginGroup("ExchangeBitfinex");
     _persLastCid = _settings.value("LastCid", 1000).toInt();
@@ -215,6 +226,7 @@ void ExchangeBitfinex::parseJson(const QString &msg)
             // call ourself twice:
             QString msg1 = msg.left(err.offset);
             QString msg2 = msg.right(msg.length() - err.offset);
+            qDebug() << __PRETTY_FUNCTION__ << "splitting into" << msg1 << "and" << msg2;
             parseJson(msg1);
             parseJson(msg2);
             return;
