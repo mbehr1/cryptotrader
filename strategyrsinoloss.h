@@ -11,7 +11,9 @@ class StrategyRSINoLoss : public QObject
 {
     Q_OBJECT
 public:
-    explicit StrategyRSINoLoss(const QString &id, const double &buyValue, std::shared_ptr<ProviderCandles> provider, QObject *parent = 0);
+    explicit StrategyRSINoLoss(const QString &id, const double &buyValue,
+                               const double &rsiBuy, const double &rsiHold,
+                               std::shared_ptr<ProviderCandles> provider, QObject *parent = 0);
 
     void setChannelBook(std::shared_ptr<ChannelBooks> book) { _channelBook = book; }
     QString getStatusMsg() const;
@@ -39,8 +41,8 @@ protected:
     double _persPrice; // what was the price we bought it
     const double _marginFactor = 1.006; // sell at >2*0.2% gain
     // todo add transactionFeeFactor !
-    const double _rsiBuy = 25;
-    const double _rsiHold = 59; // don't sell even if margin is met but rsi below that value
+    const double _rsiBuy; //  = 25;
+    const double _rsiHold; // = 59; // don't sell even if margin is met but rsi below that value
     const double _buyValue; //  = 1300; // value not shares/amount todo
     const double _minFundToSell = 0.01; // todo
 };

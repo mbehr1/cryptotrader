@@ -101,7 +101,7 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
 
         // we can setup the strategies here as well:
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), 1300.0, _providerCandles, this);
+            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), 1000.0, 25, 59, _providerCandles, this);
             if (_channelBook)
                 strategy1->setChannelBook(_channelBook);
             connect(&(*strategy1), SIGNAL(tradeAdvice(QString, bool, double, double)),
@@ -109,7 +109,7 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
             _strategies.push_front(strategy1);
         }
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), 300.0, _providerCandles, this);
+            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), 600.0, 17, 65, _providerCandles, this);
             if (_channelBook)
                 strategy2->setChannelBook(_channelBook);
             connect(&(*strategy2), SIGNAL(tradeAdvice(QString, bool, double, double)),

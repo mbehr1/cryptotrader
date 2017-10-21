@@ -3,7 +3,8 @@
 #include "strategyrsinoloss.h"
 #include "providercandles.h"
 
-StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const double &buyValue, std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
+StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const double &buyValue,
+                                     const double &rsiBuy, const double &rsiHold, std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
   , _id(id)
   , _generateMakerPrices(true)
   , _providerCandles(provider)
@@ -13,6 +14,8 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const double &buyValue, 
   , _lastRSI(-1.0)
   , _lastPrice(0.0)
   , _settings("mcbehr.de", QString("cryptotrader_strategyrsinoloss%1").arg(_id))
+  , _rsiBuy(rsiBuy)
+  , _rsiHold(rsiHold)
   , _buyValue(buyValue)
 {
     _persFundAmount = _settings.value("FundAmount", (double)0.0).toDouble();
