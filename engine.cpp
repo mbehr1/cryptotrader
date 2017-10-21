@@ -179,8 +179,14 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
         qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << " got " << amount << price;
         // update only the strategy with proper id
         for (auto &strategy : _strategies) {
-            if (strategy && strategy->id() == entry._id)
-                strategy->onFundsUpdated(amount, price);
+            if (strategy && strategy->id() == entry._id) {
+                if (!entry._done) {
+                    entry._done = true;
+                    strategy->onFundsUpdated(amount, price);
+                } else {
+                    qWarning() << __PRETTY_FUNCTION__ << "sanity check failed! (tried to update twice)";
+                }
+            }
         }
 
         if (_telegramBot) {

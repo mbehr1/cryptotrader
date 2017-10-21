@@ -39,12 +39,13 @@ protected:
     class FundsUpdateMapEntry
     {
     public:
-        FundsUpdateMapEntry() : _id("invalid"), _amount(0.0), _price(0.0) {}
+        FundsUpdateMapEntry() : _id("invalid"), _amount(0.0), _price(0.0), _done(true) {}
         FundsUpdateMapEntry(const QString &id, const double &amount, const double &price) :
-            _id(id), _amount(amount), _price(price) {}
+            _id(id), _amount(amount), _price(price), _done(false) {}
         QString _id;
         double _amount;
         double _price;
+        bool _done;
     };
 
     std::map<int, FundsUpdateMapEntry> _waitForFundsUpdateMap;
