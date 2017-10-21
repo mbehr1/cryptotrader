@@ -182,7 +182,6 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
             if (strategy && strategy->id() == entry._id)
                 strategy->onFundsUpdated(amount, price); // todo verify that sign of amount is correct!
         }
-        _waitForFundsUpdateMap.erase(it);
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
@@ -190,6 +189,7 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
                                           .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id));
             }
         }
+        _waitForFundsUpdateMap.erase(it);
 
     } else {
         qWarning() << "ignored order complete!" << cid << amount << price << status;
