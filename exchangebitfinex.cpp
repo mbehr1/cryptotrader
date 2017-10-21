@@ -210,7 +210,16 @@ void ExchangeBitfinex::parseJson(const QString &msg)
     QJsonParseError err;
     QJsonDocument json = QJsonDocument::fromJson(msg.toUtf8(), &err);
     if (json.isNull()) {
-        qDebug() << __PRETTY_FUNCTION__ << "json parse error:" << err.errorString() << msg;
+        // sometimes we get two/multiple valid json strings concatenated.
+        if (err.error == QJsonParseError::GarbageAtEnd && err.offset>0) {
+            // call ourself twice:
+            QString msg1 = msg.left(err.offset);
+            QString msg2 = msg.right(msg.length() - err.offset);
+            parseJson(msg1);
+            parseJson(msg2);
+            return;
+        }
+        qDebug() << __PRETTY_FUNCTION__ << "json parse error:" << err.errorString() << err.error << err.offset << msg;
         return;
     }
     // valid json here:
