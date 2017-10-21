@@ -223,7 +223,7 @@ void ExchangeBitfinex::parseJson(const QString &msg)
     QJsonDocument json = QJsonDocument::fromJson(utf8Msg, &err);
     if (json.isNull()) {
         // sometimes we get two/multiple valid json strings concatenated.
-        if (err.error == QJsonParseError::GarbageAtEnd && err.offset>0) {
+        if (err.error == QJsonParseError::GarbageAtEnd && err.offset>0 && err.offset<utf8Msg.length()) {
             // call ourself twice:
             QString msg1 = utf8Msg.left(err.offset);
             QString msg2 = utf8Msg.right(utf8Msg.length() - err.offset);
