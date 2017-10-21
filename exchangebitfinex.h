@@ -41,7 +41,7 @@ signals:
 private Q_SLOTS:
     void onConnected();
     void onDisconnected();
-    void onTextMessageReceived(QString message);
+    void onTextMessageReceived(const QString &message);
     void onSslErrors(const QList<QSslError> &errors);
     void connectWS();
     void onOrderCompleted(int cid, double amount, double price, QString status);

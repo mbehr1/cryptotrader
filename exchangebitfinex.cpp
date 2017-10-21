@@ -198,7 +198,7 @@ void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
         _accountInfoChannel._isSubscribed = !isTimeout;
 }
 
-void ExchangeBitfinex::onTextMessageReceived(QString message)
+void ExchangeBitfinex::onTextMessageReceived(const QString &message)
 {
     //qDebug() << __PRETTY_FUNCTION__ << message;
 
