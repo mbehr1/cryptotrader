@@ -3,7 +3,9 @@
 #include "strategyrsinoloss.h"
 #include "providercandles.h"
 
-StrategyRSINoLoss::StrategyRSINoLoss(std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent) , _providerCandles(provider)
+StrategyRSINoLoss::StrategyRSINoLoss(std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
+  , _generateMakerPrices(true)
+  , _providerCandles(provider)
   , _waitForFundsUpdate(false) // we could use this as initial trigger?
   , _valueBought(0.0)
   , _valueSold(0.0)
@@ -36,13 +38,26 @@ void StrategyRSINoLoss::onCandlesUpdated()
 
     double buyAmount = _buyValue / curPrice; // roughly
 
-    if (_channelBook) {
+    if (_channelBook && !_generateMakerPrices) {
         gotAvgAskPrice = _channelBook->getPrices(true, buyAmount - _persFundAmount, avgAskPrice, maxAskPrice);
         gotAvgBidPrice = _channelBook->getPrices(false, _persFundAmount, avgBidPrice, minBidPrice);
-        // todo check whether this generates a maker fee (0.1% trade fee instead of 0.2%)
+        // this usually does not generate a maker fee (0.1% trade fee instead of 0.2%)
+    }
+    if (_generateMakerPrices) {
+        // use sell/buy prices that will generate maker fees
         // Maker fees are paid when you add liquidity to our order book by placing
         // a limit order under the ticker price for buy and above the ticker price for sell.
+
+        // calc sell price
+        avgBidPrice = curPrice * 1.0005; // 0.05% above
+        minBidPrice = avgBidPrice;
+        gotAvgBidPrice = true;
+
+        // calc buy price
+        maxAskPrice = curPrice * 0.9995; // 0.05% below
+        gotAvgAskPrice = true;
     }
+
     qDebug() << __PRETTY_FUNCTION__ << rsi << curPrice << _waitForFundsUpdate << " valueBought=" << _valueBought << " valueSold=" << _valueSold << " current val=" << _persFundAmount*curPrice << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
     // is rsi valid?
     if (rsi < 0.0) return;

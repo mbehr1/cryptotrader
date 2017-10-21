@@ -21,6 +21,7 @@ public slots:
     void onCandlesUpdated();
     void onFundsUpdated(double amount, double price);
 protected:
+    bool _generateMakerPrices;
     std::shared_ptr<ProviderCandles> _providerCandles;
     std::shared_ptr<ChannelBooks> _channelBook;
     bool _waitForFundsUpdate;
