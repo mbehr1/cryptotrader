@@ -115,10 +115,14 @@ QString StrategyRSINoLoss::getStatusMsg() const
     msg.append(QString("StrategyRSINoLoss%1:\n").arg(_id));
     msg.append(QString(" amount bought: %1\n").arg(_persFundAmount));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
-    if (_persFundAmount >= _minFundToSell) {
-        msg.append(QString(" waiting for price > %1 and RSI > %2\n").arg(_persPrice * _marginFactor).arg(_rsiHold));
+    if (_waitForFundsUpdate) {
+        msg.append(QString(" waiting for last order to finish\n"));
     } else {
-        msg.append(QString(" waiting for RSI < %1\n").arg(_rsiBuy));
+        if (_persFundAmount >= _minFundToSell) {
+            msg.append(QString(" waiting for price > %1 and RSI > %2\n").arg(_persPrice * _marginFactor).arg(_rsiHold));
+        } else {
+            msg.append(QString(" waiting for RSI < %1\n").arg(_rsiBuy));
+        }
     }
     msg.append(QString(" last price was %1 and RSI %2.").arg(_lastPrice).arg(_lastRSI));
     return msg;

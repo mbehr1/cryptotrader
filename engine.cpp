@@ -180,7 +180,7 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
         // todo update only the strategy with proper id
         for (auto &strategy : _strategies) {
             if (strategy && strategy->id() == entry._id)
-                strategy->onFundsUpdated(amount, price); // todo verify that sign of amount is correct!
+                strategy->onFundsUpdated(amount, price);
         }
 
         if (_telegramBot) {
