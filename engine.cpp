@@ -177,7 +177,7 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
     if (it != _waitForFundsUpdateMap.end()) {
         auto &entry = it->second;
         qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << " got " << amount << price;
-        // todo update only the strategy with proper id
+        // update only the strategy with proper id
         for (auto &strategy : _strategies) {
             if (strategy && strategy->id() == entry._id)
                 strategy->onFundsUpdated(amount, price);

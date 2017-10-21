@@ -219,13 +219,14 @@ void ExchangeBitfinex::onSslErrors(const QList<QSslError> &errors)
 void ExchangeBitfinex::parseJson(const QString &msg)
 {
     QJsonParseError err;
-    QJsonDocument json = QJsonDocument::fromJson(msg.toUtf8(), &err);
+    QByteArray utf8Msg = msg.toUtf8();
+    QJsonDocument json = QJsonDocument::fromJson(utf8Msg, &err);
     if (json.isNull()) {
         // sometimes we get two/multiple valid json strings concatenated.
         if (err.error == QJsonParseError::GarbageAtEnd && err.offset>0) {
             // call ourself twice:
-            QString msg1 = msg.left(err.offset);
-            QString msg2 = msg.right(msg.length() - err.offset);
+            QString msg1 = utf8Msg.left(err.offset);
+            QString msg2 = utf8Msg.right(utf8Msg.length() - err.offset);
             qDebug() << __PRETTY_FUNCTION__ << "splitting into" << msg1 << "and" << msg2;
             parseJson(msg1);
             parseJson(msg2);
