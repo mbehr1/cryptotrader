@@ -60,7 +60,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
         gotAvgAskPrice = true;
     }
 
-    qDebug() << __PRETTY_FUNCTION__ << _id << rsi << curPrice << _waitForFundsUpdate << " valueBought=" << _valueBought << " valueSold=" << _valueSold << " current val=" << _persFundAmount*curPrice << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
+    //qDebug() << __PRETTY_FUNCTION__ << _id << rsi << curPrice << _waitForFundsUpdate << " valueBought=" << _valueBought << " valueSold=" << _valueSold << " current val=" << _persFundAmount*curPrice << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
     // is rsi valid?
     if (rsi < 0.0) return;
 
