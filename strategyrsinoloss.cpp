@@ -3,7 +3,8 @@
 #include "strategyrsinoloss.h"
 #include "providercandles.h"
 
-StrategyRSINoLoss::StrategyRSINoLoss(std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
+StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const double &buyValue, std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
+  , _id(id)
   , _generateMakerPrices(true)
   , _providerCandles(provider)
   , _waitForFundsUpdate(false) // we could use this as initial trigger?
@@ -11,11 +12,9 @@ StrategyRSINoLoss::StrategyRSINoLoss(std::shared_ptr<ProviderCandles> provider, 
   , _valueSold(0.0)
   , _lastRSI(-1.0)
   , _lastPrice(0.0)
-  , _settings("mcbehr.de", "cryptotrader_strategyrsinoloss")
+  , _settings("mcbehr.de", QString("cryptotrader_strategyrsinoloss%1").arg(_id))
+  , _buyValue(buyValue)
 {
-    // reset _settings.setValue("FundAmount", 0.0);
-    // _settings.setValue("FundAmount", 0.117678);
-    // _settings.setValue("Price", 4248.9);
     _persFundAmount = _settings.value("FundAmount", (double)0.0).toDouble();
     _persPrice = _settings.value("Price", 0.0).toDouble();
     connect(&(*_providerCandles), SIGNAL(dataUpdated()),
@@ -58,7 +57,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
         gotAvgAskPrice = true;
     }
 
-    qDebug() << __PRETTY_FUNCTION__ << rsi << curPrice << _waitForFundsUpdate << " valueBought=" << _valueBought << " valueSold=" << _valueSold << " current val=" << _persFundAmount*curPrice << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
+    qDebug() << __PRETTY_FUNCTION__ << _id << rsi << curPrice << _waitForFundsUpdate << " valueBought=" << _valueBought << " valueSold=" << _valueSold << " current val=" << _persFundAmount*curPrice << " gain=" << (_valueSold + (_persFundAmount*curPrice)) - _valueBought ;
     // is rsi valid?
     if (rsi < 0.0) return;
 
@@ -69,12 +68,12 @@ void StrategyRSINoLoss::onCandlesUpdated()
     if (_persFundAmount >= _minFundToSell ) {
         _lastPrice = avgBidPrice;
         // do we have enough margin yet?
-        qDebug() << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
+        qDebug() << _id << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
         if (avgBidPrice > (_persPrice * _marginFactor) && rsi > _rsiHold) {
             // sell all
             _waitForFundsUpdate = true;
             _valueSold += _persFundAmount * avgBidPrice;
-            emit tradeAdvice(true, _persFundAmount, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
+            emit tradeAdvice(_id, true, _persFundAmount, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
         }
     } else {
         _lastPrice = avgAskPrice;
@@ -84,17 +83,17 @@ void StrategyRSINoLoss::onCandlesUpdated()
             buyAmount = _buyValue / avgAskPrice; // can only be lower than cur price
             _valueBought += (buyAmount - _persFundAmount)*(gotAvgAskPrice ?
                                                             avgAskPrice : curPrice);
-            qDebug() << QString("buying %1 shares for avg %2 / limit %3 / cur %4").
+            qDebug() << _id << QString("buying %1 shares for avg %2 / limit %3 / cur %4").
                         arg((buyAmount-_persFundAmount)).arg(avgAskPrice).arg(maxAskPrice).arg(curPrice);
-            emit tradeAdvice(false, buyAmount - _persFundAmount, gotAvgAskPrice ? maxAskPrice : curPrice);
+            emit tradeAdvice(_id, false, buyAmount - _persFundAmount, gotAvgAskPrice ? maxAskPrice : curPrice);
         }
     }
 }
 
 void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
 {
-    qDebug() << __PRETTY_FUNCTION__ << amount << price;
-    qDebug() << "old data:" << _persFundAmount << _persPrice;
+    qDebug() << __PRETTY_FUNCTION__ << _id << amount << price;
+    qDebug() << _id << "old data:" << _persFundAmount << _persPrice;
     double oldValue = _persFundAmount * _persPrice;
     _persFundAmount += amount;
     oldValue += (amount * price);
@@ -102,7 +101,7 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
     _settings.setValue("FundAmount", _persFundAmount);
     _settings.setValue("Price", _persPrice);
     _settings.sync();
-    qDebug() << "new data:" << _persFundAmount << _persPrice;
+    qDebug() << _id << "new data:" << _persFundAmount << _persPrice;
 
     _waitForFundsUpdate = false;
 }
@@ -110,7 +109,7 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
 QString StrategyRSINoLoss::getStatusMsg() const
 {
     QString msg;
-    msg.append("StrateyRSINoLoss:\n");
+    msg.append(QString("StrategyRSINoLoss%1:\n").arg(_id));
     msg.append(QString(" amount bought: %1\n").arg(_persFundAmount));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
     if (_persFundAmount >= _minFundToSell) {

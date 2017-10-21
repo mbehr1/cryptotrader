@@ -99,17 +99,29 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
     if (!_providerCandles && channel->_channel.compare("trades")==0) {
         _providerCandles = std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(channel), this);
 
-        // we can setup the strategy here as well:
-        _strategy = std::make_shared<StrategyRSINoLoss>(_providerCandles, this);
-        if (_channelBook)
-            _strategy->setChannelBook(_channelBook);
-        connect(&(*_strategy), SIGNAL(tradeAdvice(bool, double, double)),
-                this, SLOT(onTradeAdvice(bool,double,double)));
+        // we can setup the strategies here as well:
+        {
+            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), 1300.0, _providerCandles, this);
+            if (_channelBook)
+                strategy1->setChannelBook(_channelBook);
+            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, bool,double,double)));
+            _strategies.push_front(strategy1);
+        }
+        {
+            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), 300.0, _providerCandles, this);
+            if (_channelBook)
+                strategy2->setChannelBook(_channelBook);
+            connect(&(*strategy2), SIGNAL(tradeAdvice(QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, bool,double,double)));
+            _strategies.push_front(strategy2);
+        }
     }
     if (!_channelBook && channel->_channel.compare("book")==0) {
         _channelBook = std::dynamic_pointer_cast<ChannelBooks>(channel);
-        if (_strategy)
-            _strategy->setChannelBook(_channelBook);
+        for (auto &strategy : _strategies)
+            if (strategy)
+                strategy->setChannelBook(_channelBook);
     }
 }
 
@@ -140,20 +152,20 @@ void Engine::onSubscriberMsg(QString msg)
 }
 
 
-void Engine::onTradeAdvice(bool sell, double amount, double price)
+void Engine::onTradeAdvice(QString id, bool sell, double amount, double price)
 {
-    qDebug() << __FUNCTION__ << (sell? "sell" : "buy") << amount << price;
+    qDebug() << __FUNCTION__ << id << (sell? "sell" : "buy") << amount << price;
 
     int ret = _exchange.newOrder("tBTCUSD", sell ? -amount : amount, price);
     qDebug() << __FUNCTION__ << "ret=" << ret;
 
     if (ret>0)
-        _waitForFundsUpdateMap[ret] = std::make_pair(sell ? -amount : amount, price);
+        _waitForFundsUpdateMap[ret] = FundsUpdateMapEntry(id, sell ? -amount : amount, price);
 
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("new order (cid %4) raised: %1 %2 tBTCUSD at %3")
-                                      .arg(sell ? "sell" : "buy").arg(amount).arg(price).arg(ret));
+            _telegramBot->sendMessage(s, QString("new order %5 (cid %4) raised: %1 %2 tBTCUSD at %3")
+                                      .arg(sell ? "sell" : "buy").arg(amount).arg(price).arg(ret).arg(id));
         }
     }
 }
@@ -163,8 +175,13 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
     qDebug() << __PRETTY_FUNCTION__ << cid << amount << price << status;
     auto it = _waitForFundsUpdateMap.find(cid);
     if (it != _waitForFundsUpdateMap.end()) {
-        qDebug() << "order complete waiting for " << it->second.first << it->second.second << " got " << amount << price;
-        _strategy->onFundsUpdated(amount, price); // todo verify that sign of amount is correct!
+        auto &entry = it->second;
+        qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << " got " << amount << price;
+        // todo update only the strategy with proper id
+        for (auto &strategy : _strategies) {
+            if (strategy && strategy->id() == entry._id)
+                strategy->onFundsUpdated(amount, price); // todo verify that sign of amount is correct!
+        }
         _waitForFundsUpdateMap.erase(it);
 
         if (_telegramBot) {
@@ -215,8 +232,12 @@ void Engine::onNewMessage(Telegram::Message msg)
         }
         else
         if (msg.string.compare("status")==0) {
-            QString status = _strategy->getStatusMsg();
-            _telegramBot->sendMessage(msg.from.id, status,false, false, msg.id);
+            for (auto &strategy : _strategies) {
+                if (strategy) {
+                    QString status = strategy->getStatusMsg();
+                    _telegramBot->sendMessage(msg.from.id, status,false, false, msg.id);
+                }
+            }
         }
         else
         if (msg.string.compare("restart")==0) {
