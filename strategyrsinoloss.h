@@ -42,7 +42,7 @@ protected:
     const double _rsiBuy = 25;
     const double _rsiHold = 59; // don't sell even if margin is met but rsi below that value
     const double _buyValue; //  = 1300; // value not shares/amount todo
-    const double _minFundToSell = 0.05; // todo
+    const double _minFundToSell = 0.01; // todo
 };
 
 #endif // STRATEGYRSINOLOSS_H

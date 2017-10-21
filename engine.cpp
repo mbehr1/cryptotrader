@@ -186,8 +186,8 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
-                _telegramBot->sendMessage(s, QString("order completed (cid %3): %1 tBTCUSD at %2 (%4)")
-                                          .arg(amount).arg(price).arg(cid).arg(status));
+                _telegramBot->sendMessage(s, QString("order completed %5 (cid %3): %1 tBTCUSD at %2 (%4)")
+                                          .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id));
             }
         }
 
