@@ -18,6 +18,7 @@ public:
     void setChannelBook(std::shared_ptr<ChannelBooks> book) { _channelBook = book; }
     QString getStatusMsg() const;
     const QString &id() const { return _id; }
+    QString onNewBotMessage(const QString &msg);
 signals:
     void tradeAdvice(QString id, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
 public slots:

@@ -1,5 +1,6 @@
 #include <QDebug>
 #include <QSettings>
+#include <QStringList>
 #include "strategyrsinoloss.h"
 #include "providercandles.h"
 
@@ -126,4 +127,40 @@ QString StrategyRSINoLoss::getStatusMsg() const
     }
     msg.append(QString(" last price was %1 and RSI %2.").arg(_lastPrice).arg(_lastRSI));
     return msg;
+}
+
+QString StrategyRSINoLoss::onNewBotMessage(const QString &msg)
+{ // process msg/commands from telegram
+    QString toRet = QString("StrategyRSINoLoss%1: ").arg(_id);
+    qDebug() << __PRETTY_FUNCTION__ << _id << msg;
+    if (msg.compare("status")==0) {
+        return getStatusMsg();
+    }
+    else if (msg.startsWith("buy ") || msg.startsWith("sell ")) {
+        if (_waitForFundsUpdate)
+            return toRet.append("currently waiting for prev order to finish.");
+
+        QStringList params = msg.split(' ');
+        if (params.count()!= 4)
+            return toRet.append(QString("expected 4 params got %1").arg(params.count()));
+
+        bool doBuy = params[0].compare("buy")==0; // no sanity check as we allowed only "buy " or "sell "...
+        double amount = params[1].toDouble();
+        double limit = params[3].toDouble();
+        // expect msg buy|sell <amount> tBTCUSD <limit>
+        if (params[2].compare("tBTCUSD")!=0)
+            return toRet.append("only supporting currency tBTCUSD for now!");
+        if (doBuy) {
+            _valueBought += amount * limit;
+        } else {
+            _valueSold += amount * limit;
+        }
+        _waitForFundsUpdate = true;
+        emit tradeAdvice(_id, !doBuy, amount, limit);
+        return toRet.append(QString("%1 %2 %3 for limit %4").arg(doBuy ? "buying" : "selling").arg(amount).arg(params[2]).arg(limit));
+
+    }
+    else {
+        return toRet.append(QString("don't know what to do with <%1>!").arg(msg));
+    }
 }

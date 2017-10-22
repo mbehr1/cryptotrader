@@ -250,5 +250,16 @@ void Engine::onNewMessage(Telegram::Message msg)
             _telegramBot->sendMessage(msg.from.id, "restarting with SIGHUP",false, false, msg.id);
             raise(SIGHUP);
         }
+        else
+        if (msg.string.startsWith("#")) { // send to a single strategy
+            for (auto &strategy : _strategies) {
+                if (msg.string.startsWith(QString("%1 ").arg(strategy->id()))) { // we want e.g. "#1 status"
+                    QString command = msg.string;
+                    command.remove(0, strategy->id().length()+1);
+                    QString answer = strategy->onNewBotMessage(command);
+                    _telegramBot->sendMessage(msg.from.id, answer, false, false, msg.id);
+                }
+            }
+        }
     }
 }
