@@ -174,7 +174,8 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
 
 void ExchangeBitfinex::onConnected()
 {
-    qDebug() << __PRETTY_FUNCTION__;
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) return;
     _isConnected = true;
     connect(&_ws, &QWebSocket::textMessageReceived,
                 this, &ExchangeBitfinex::onTextMessageReceived);
@@ -185,11 +186,12 @@ void ExchangeBitfinex::onConnected()
 
 void ExchangeBitfinex::onDisconnected()
 {
-    qDebug() << __PRETTY_FUNCTION__;
-    _isConnected = false;
-    disconnect(&_ws, &QWebSocket::textMessageReceived,
-               this, &ExchangeBitfinex::onTextMessageReceived);
-
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) {
+        _isConnected = false;
+        disconnect(&_ws, &QWebSocket::textMessageReceived,
+                   this, &ExchangeBitfinex::onTextMessageReceived);
+    }
     _checkConnectionTimer.start(1000); // todo check reconnect behaviour
 }
 
@@ -206,8 +208,9 @@ void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
 void ExchangeBitfinex::onTextMessageReceived(const QString &message)
 {
     //qDebug() << __PRETTY_FUNCTION__ << message;
-
-    parseJson(message);
+    QString msgCopy = message;
+    msgCopy.append(' '); // modify to create real copy and not shallow todo only until we find real root cause for those duplicate msgs
+    parseJson(msgCopy);
 }
 
 void ExchangeBitfinex::onOrderCompleted(int cid, double amount, double price, QString status)
