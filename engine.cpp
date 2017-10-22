@@ -188,15 +188,17 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
                 }
             }
         }
+        const QString botMsg = QString("order completed %5 (cid %3): %1 tBTCUSD at %2 (%4)")
+                .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id);
+
+        it = _waitForFundsUpdateMap.erase(it);
+        qDebug() << __PRETTY_FUNCTION__ << "_waitForFundsUpdateMap.size=" << _waitForFundsUpdateMap.size();
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
-                _telegramBot->sendMessage(s, QString("order completed %5 (cid %3): %1 tBTCUSD at %2 (%4)")
-                                          .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id));
+                _telegramBot->sendMessage(s, botMsg);
             }
         }
-        it = _waitForFundsUpdateMap.erase(it);
-        qDebug() << __PRETTY_FUNCTION__ << "_waitForFundsUpdateMap.size=" << _waitForFundsUpdateMap.size();
 
     } else {
         qWarning() << "ignored order complete!" << cid << amount << price << status;
