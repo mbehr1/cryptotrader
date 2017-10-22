@@ -39,8 +39,10 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
     // read subscribers:
     QStringList subscribers = set.value("TelegramSubscribers", QVariant(QStringList())).toStringList();
+    qDebug() << __PRETTY_FUNCTION__ << "subscribers" << subscribers << subscribers.count();
     for (auto subs : subscribers)
-        _telegramSubscribers.insert(subs.toInt());
+        if (subs.length())
+            _telegramSubscribers.insert(subs.toInt());
 
     QString bitfinexKey = set.value("BitfinexApiKey", QString("")).toString();
     if (!bitfinexKey.length()) {
@@ -66,7 +68,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
     // say hello to all subscribers:
     for (auto &s : _telegramSubscribers) {
-        _telegramBot->sendMessage(s, QString("welcome back. cryptotrader just started."));
+        qDebug() << __PRETTY_FUNCTION__ << "welcoming" << s;
+        _telegramBot->sendMessage(QVariant((int)s), QString("welcome back. cryptotrader just started."));
     }
 
 
