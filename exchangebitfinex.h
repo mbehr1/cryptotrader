@@ -19,7 +19,7 @@ class ExchangeBitfinex : public QObject
 public:
     ExchangeBitfinex(QObject *parent = Q_NULLPTR);
     ExchangeBitfinex(const ExchangeBitfinex &) = delete;
-
+    ~ExchangeBitfinex();
     void setAuthData(const QString &api, const QString &skey);
 
     bool subscribeChannel(const QString &channelName, const QString &symbol,

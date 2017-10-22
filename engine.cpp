@@ -172,10 +172,10 @@ void Engine::onTradeAdvice(QString id, bool sell, double amount, double price)
 
 void Engine::onOrderCompleted(int cid, double amount, double price, QString status)
 {
-    qDebug() << __PRETTY_FUNCTION__ << cid << amount << price << status;
+    qDebug() << __PRETTY_FUNCTION__ << cid << amount << price << status << _waitForFundsUpdateMap.size();
     auto it = _waitForFundsUpdateMap.find(cid);
     if (it != _waitForFundsUpdateMap.end()) {
-        auto &entry = it->second;
+        FundsUpdateMapEntry &entry = it->second;
         qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << " got " << amount << price;
         // update only the strategy with proper id
         for (auto &strategy : _strategies) {
@@ -195,7 +195,8 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
                                           .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id));
             }
         }
-        _waitForFundsUpdateMap.erase(it);
+        it = _waitForFundsUpdateMap.erase(it);
+        qDebug() << __PRETTY_FUNCTION__ << "_waitForFundsUpdateMap.size=" << _waitForFundsUpdateMap.size();
 
     } else {
         qWarning() << "ignored order complete!" << cid << amount << price << status;

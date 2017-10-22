@@ -34,8 +34,8 @@ void StrategyRSINoLoss::onCandlesUpdated()
     // ask books for estimated price for our intended volume here!
     double avgAskPrice = curPrice;
     double avgBidPrice = curPrice;
-    double maxAskPrice; // we need to pay that much if we buy (limit / risk)
-    double minBidPrice; // we might only get that much if we sell (limit / risk)
+    double maxAskPrice = avgAskPrice; // we need to pay that much if we buy (limit / risk)
+    double minBidPrice = avgBidPrice; // we might only get that much if we sell (limit / risk)
     bool gotAvgAskPrice = false;
     bool gotAvgBidPrice = false;
 

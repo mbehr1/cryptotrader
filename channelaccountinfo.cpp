@@ -32,7 +32,7 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                     double amount = a[7].toDouble();
                     double price = a[17].toDouble();
                     QString status = a[13].toString();
-                    qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status;
+                    qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status << data;
                     emit orderCompleted(cid, amount, price, status);
                 } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
             } else

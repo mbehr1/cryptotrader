@@ -46,6 +46,11 @@ ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
     connectWS();
 }
 
+ExchangeBitfinex::~ExchangeBitfinex()
+{
+    disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBitfinex::onDisconnected);
+}
+
 int ExchangeBitfinex::getNextCid()
 {
     ++_persLastCid;
