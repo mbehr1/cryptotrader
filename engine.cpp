@@ -112,13 +112,22 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
             _strategies.push_front(strategy1);
         }
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), 600.0, 17, 65, _providerCandles, this);
+            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), 500.0, 17, 65, _providerCandles, this);
             if (_channelBook)
                 strategy2->setChannelBook(_channelBook);
             connect(&(*strategy2), SIGNAL(tradeAdvice(QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, bool,double,double)));
             _strategies.push_front(strategy2);
         }
+        {
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#3"), 100.0, 15, 67, _providerCandles, this);
+            if (_channelBook)
+                strategy3->setChannelBook(_channelBook);
+            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, bool,double,double)));
+            _strategies.push_front(strategy3);
+        }
+
     }
     if (!_channelBook && channel->_channel.compare("book")==0) {
         _channelBook = std::dynamic_pointer_cast<ChannelBooks>(channel);
