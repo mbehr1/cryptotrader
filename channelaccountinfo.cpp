@@ -36,11 +36,12 @@ QString ChannelAccountInfo::getStatusMsg() const
         for (const auto &ft : _fundings) {
             const Funding &fu = ft.second;
             if (fu._status != "CLOSED") {
-                toRet.append(QString("  %1:").arg(ft.first));
-                toRet.append(QString("%1 %2 at %3%%")
+                toRet.append(QString("  #%1: ").arg(ft.first));
+                toRet.append(QString("%1 %2 at %3% (%4%)")
                              .arg(fu._amount)
                              .arg(fu._symbol)
                              .arg(fu._rate)
+                             .arg(fu._rate*365)
                              );
 
             }
