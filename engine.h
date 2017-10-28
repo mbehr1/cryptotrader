@@ -27,6 +27,7 @@ public slots:
     void onCandlesUpdated();
     void onTradeAdvice(QString id, QString tradePair, bool sell, double amount, double price);
     void onOrderCompleted(int cid, double amount, double price, QString status);
+    void onWalletUpdate(QString type, QString cur, double value, double delta);
     void onNewMessage(Telegram::Message msg);
     void onChannelTimeout(int channelId, bool isTimeout);
     void onSubscriberMsg(QString msg);

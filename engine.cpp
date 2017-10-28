@@ -80,6 +80,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
             this, SLOT(onOrderCompleted(int,double,double,QString)));
     connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
             this, SLOT(onNewChannelSubscribed(std::shared_ptr<Channel>)));
+    connect(&_exchange, SIGNAL(walletUpdate(QString,QString,double,double)),
+            this, SLOT(onWalletUpdate(QString,QString,double,double)));
     // todo subscribe channels here only (needs connect or queue or ...)
 
     _exchange.setAuthData(bitfinexKey, bitfinexSKey);
@@ -162,6 +164,16 @@ void Engine::onChannelTimeout(int channelId, bool isTimeout)
         for (auto &s : _telegramSubscribers) {
             _telegramBot->sendMessage(s, QString("warning! Channel %1 has %2!")
                                       .arg(channelId).arg(isTimeout ? "timeout" : "recovered"));
+        }
+    }
+}
+
+void Engine::onWalletUpdate(QString type, QString cur, double value, double delta)
+{
+    if (_telegramBot) {
+        for (auto &s : _telegramSubscribers) {
+            _telegramBot->sendMessage(s, QString("WU %1 %2=%3 (%4)")
+                                      .arg(type).arg(cur).arg(value).arg(delta));
         }
     }
 }

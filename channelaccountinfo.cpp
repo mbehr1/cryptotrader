@@ -96,7 +96,19 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             QString wType = arr[0].toString();
                             QString cur = arr[1].toString();
                             double amount = arr[2].toDouble();
-                            _wallet[wType][cur] = amount;
+                            double oldAmount = 0.0;
+                            auto it1 = _wallet.find(wType);
+                            if (it1 != _wallet.end()) {
+                                auto it2 = (*it1).second.find(cur);
+                                if (it2 != (*it1).second.end()) {
+                                    oldAmount = (*it2).second;
+                                    (*it2).second = amount;
+                                } else
+                                    _wallet[wType][cur] = amount;
+                            } else
+                                _wallet[wType][cur] = amount;
+                            emit walletUpdate(wType, cur, amount, amount-oldAmount);
+
                             qDebug() << __PRETTY_FUNCTION__ << "wu:" << wType << cur << "=" << amount;
                         }
                     } else
@@ -108,12 +120,12 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                         auto arr = wu.toArray();
                                         if (arr.size()<3) {
                                             qWarning() << __PRETTY_FUNCTION__ << "not enough data for ws" << data << arr;
+                                        } else {
+                                            QString wType = arr[0].toString();
+                                            QString cur = arr[1].toString();
+                                            double amount = arr[2].toDouble();
+                                            _wallet[wType][cur] = amount;
                                         }
-                                        QString wType = arr[0].toString();
-                                        QString cur = arr[1].toString();
-                                        double amount = arr[2].toDouble();
-                                        _wallet[wType][cur] = amount;
-
                                     }
                                 }
                             }

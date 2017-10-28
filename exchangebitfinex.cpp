@@ -35,6 +35,8 @@ ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
             this, SLOT(onOrderCompleted(int,double,double,QString)));
     connect(&_accountInfoChannel, SIGNAL(timeout(int, bool)),
             this, SLOT(onChannelTimeout(int, bool)));
+    connect(&_accountInfoChannel, SIGNAL(walletUpdate(QString,QString,double,double)),
+            this, SIGNAL(walletUpdate(QString,QString,double,double)));
 
     connect(&_checkConnectionTimer, SIGNAL(timeout()), this, SLOT(connectWS()));
     connect(&_ws, &QWebSocket::connected, this, &ExchangeBitfinex::onConnected);
