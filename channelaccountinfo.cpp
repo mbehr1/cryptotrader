@@ -80,7 +80,25 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             _wallet[wType][cur] = amount;
                             qDebug() << __PRETTY_FUNCTION__ << "wu:" << wType << cur << "=" << amount;
                         }
-                    }
+                    } else
+                        if (action.compare("ws")==0) { // 0, "ws", [["exchange", "BTC", 0.1, 0, null][...]]
+                            if (data.at(2).isArray()) {
+                                auto outarr = data.at(2).toArray();
+                                for (const auto &wu : outarr) {
+                                    if (wu.isArray()) {
+                                        auto arr = wu.toArray();
+                                        if (arr.size()<3) {
+                                            qWarning() << __PRETTY_FUNCTION__ << "not enough data for ws" << data << arr;
+                                        }
+                                        QString wType = arr[0].toString();
+                                        QString cur = arr[1].toString();
+                                        double amount = arr[2].toDouble();
+                                        _wallet[wType][cur] = amount;
+
+                                    }
+                                }
+                            }
+                        }
                     else qDebug() << __PRETTY_FUNCTION__ << data;
         } else {
             qDebug() << __PRETTY_FUNCTION__ << data;
