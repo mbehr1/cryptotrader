@@ -21,7 +21,7 @@ public:
     ExchangeBitfinex(const ExchangeBitfinex &) = delete;
     ~ExchangeBitfinex();
     void setAuthData(const QString &api, const QString &skey);
-
+    QString getStatusMsg() const;
     bool subscribeChannel(const QString &channelName, const QString &symbol,
                           const std::map<QString, QString> &options=std::map<QString, QString>());
 

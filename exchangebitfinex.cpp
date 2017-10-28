@@ -51,6 +51,15 @@ ExchangeBitfinex::~ExchangeBitfinex()
     disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBitfinex::onDisconnected);
 }
 
+QString ExchangeBitfinex::getStatusMsg() const
+{
+    QString toRet = QString("ExchangeBitfinex (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
+            .arg(_isAuth ? "AU" : "not authenticated!");
+
+    toRet.append(QString("\n %1").arg(_accountInfoChannel.getStatusMsg()));
+    return toRet;
+}
+
 int ExchangeBitfinex::getNextCid()
 {
     ++_persLastCid;

@@ -1,6 +1,7 @@
 #ifndef CHANNELACCOUNTINFO_H
 #define CHANNELACCOUNTINFO_H
 
+#include <map>
 #include <QObject>
 #include "channel.h"
 
@@ -11,6 +12,7 @@ public:
     explicit ChannelAccountInfo();
     virtual ~ChannelAccountInfo();
     virtual bool handleChannelData(const QJsonArray &data) override;
+    virtual QString getStatusMsg() const override;
 
     class TradeItem
     {
@@ -30,6 +32,7 @@ public:
     typedef std::map<long long, TradeItem> TradeItemMap;
 protected:
     TradeItemMap _trades; // mapped by trade id
+    std::map<QString, std::map<QString, double>> _wallet; // _wallet[type][cur]=amount
 
 signals:
     void orderCompleted(int cid, double amount, double price, QString status);

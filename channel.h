@@ -13,6 +13,7 @@ public:
     Channel(int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed=true);
     virtual ~Channel();
     virtual bool handleChannelData(const QJsonArray &data);
+    virtual QString getStatusMsg() const { return QString("Channel %1 (%2 %3):").arg(_channel).arg(_isSubscribed ? "s" : "u").arg(_isTimeout ? "TO" : "OK"); }
 
 signals:
     void dataUpdated();

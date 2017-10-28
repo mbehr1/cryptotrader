@@ -15,6 +15,22 @@ ChannelAccountInfo::~ChannelAccountInfo()
 
 }
 
+QString ChannelAccountInfo::getStatusMsg() const
+{
+    QString toRet = Channel::getStatusMsg();
+    toRet.append("\n Wallet:\n");
+    if (!_wallet.size()) {
+        toRet.append("  empty\n");
+    } else
+        for (const auto &wt : _wallet) {
+            toRet.append(QString("  %1:\n").arg(wt.first));
+            for (const auto &cur : wt.second) {
+                toRet.append(QString("   %1: %2\n").arg(cur.first).arg(cur.second));
+            }
+        }
+    return toRet;
+}
+
 bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
 {
     if (Channel::handleChannelData(data)) {
@@ -50,7 +66,22 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             _trades.insert(std::make_pair(id, TradeItem(data)));
                         }
                     } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
-                } else qDebug() << __PRETTY_FUNCTION__ << data;
+                } else
+                    if (action.compare("wu")==0) { // 0, "wu", ["funding", "BTC", 0.1, 0, null]
+                        if (data.at(2).isArray()) {
+                            auto arr = data.at(2).toArray();
+                            if (arr.size()<3) {
+                                qWarning() << __PRETTY_FUNCTION__ << "not enough data for wu" << data;
+                                return false;
+                            }
+                            QString wType = arr[0].toString();
+                            QString cur = arr[1].toString();
+                            double amount = arr[2].toDouble();
+                            _wallet[wType][cur] = amount;
+                            qDebug() << __PRETTY_FUNCTION__ << "wu:" << wType << cur << "=" << amount;
+                        }
+                    }
+                    else qDebug() << __PRETTY_FUNCTION__ << data;
         } else {
             qDebug() << __PRETTY_FUNCTION__ << data;
             if (actionValue.isArray()) {

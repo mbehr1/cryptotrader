@@ -253,6 +253,7 @@ void Engine::onNewMessage(Telegram::Message msg)
         }
         else
         if (msg.string.compare("status")==0) {
+            _telegramBot->sendMessage(msg.from.id, _exchange.getStatusMsg(), false, false, msg.id);
             for (auto &strategy : _strategies) {
                 if (strategy) {
                     QString status = strategy->getStatusMsg();
