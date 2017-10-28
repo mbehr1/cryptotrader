@@ -81,7 +81,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
     connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
             this, SLOT(onNewChannelSubscribed(std::shared_ptr<Channel>)));
     connect(&_exchange, SIGNAL(walletUpdate(QString,QString,double,double)),
-            this, SLOT(onWalletUpdate(QString,QString,double,double)));
+            this, SLOT(onWalletUpdate(QString,QString,double,double)), Qt::QueuedConnection);
     // todo subscribe channels here only (needs connect or queue or ...)
 
     _exchange.setAuthData(bitfinexKey, bitfinexSKey);
