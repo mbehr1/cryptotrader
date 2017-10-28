@@ -302,18 +302,14 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 
     // now do subscribes (todo find better way to queue (and wait for answers...)
     (void) /* todo err hdlg */ subscribeChannel("trades", "tBTCUSD");
+    (void) subscribeChannel("trades", "tBTGUSD");
     std::map<QString, QString> options;
     options.insert(std::make_pair<QString, QString>("prec", "P0"));
     options.insert(std::make_pair<QString, QString>("freq", "F0"));
     options.insert(std::make_pair<QString, QString>("len", "25"));
 
     (void) /* todo err hdlg */ subscribeChannel("book", "tBTCUSD", options);
-
-    // try a real order:
-    // int ret = newOrder("tBTCUSD", -0.005, 4490.0); // Sell
-    // buy order
-    // int ret = newOrder("tBTCUSD", 0.02, 4444.4);
-    //qWarning() << "new order" << ret;
+    (void) subscribeChannel("book", "tBTGUSD", options);
 
 }
 

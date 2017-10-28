@@ -1,12 +1,14 @@
+#include <cassert>
 #include <QDebug>
 #include <QSettings>
 #include <QStringList>
 #include "strategyrsinoloss.h"
 #include "providercandles.h"
 
-StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const double &buyValue,
+StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const QString &tradePair, const double &buyValue,
                                      const double &rsiBuy, const double &rsiHold, std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
   , _id(id)
+  , _tradePair(tradePair)
   , _generateMakerPrices(true)
   , _providerCandles(provider)
   , _waitForFundsUpdate(false) // we could use this as initial trigger?
@@ -21,9 +23,20 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const double &buyValue,
 {
     _persFundAmount = _settings.value("FundAmount", (double)0.0).toDouble();
     _persPrice = _settings.value("Price", 0.0).toDouble();
+    qDebug() << __PRETTY_FUNCTION__ << _id << _tradePair << "got" << _persFundAmount << "bought at " << _persPrice;
+    if (_providerCandles) {
+        qDebug() << "providerCandles tradePair=" << _providerCandles->tradePair();
+        assert( _providerCandles->tradePair() == _tradePair);
+    }
     connect(&(*_providerCandles), SIGNAL(dataUpdated()),
             this, SLOT(onCandlesUpdated()));
 }
+
+void StrategyRSINoLoss::setChannelBook(std::shared_ptr<ChannelBooks> book)
+ {
+    _channelBook = book;
+    assert( _channelBook->symbol() == _tradePair);
+ }
 
 void StrategyRSINoLoss::onCandlesUpdated()
 {
@@ -77,7 +90,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
             // sell all
             _waitForFundsUpdate = true;
             _valueSold += _persFundAmount * avgBidPrice;
-            emit tradeAdvice(_id, true, _persFundAmount, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
+            emit tradeAdvice(_id, _tradePair, true, _persFundAmount, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
         }
     } else {
         _lastPrice = avgAskPrice;
@@ -89,7 +102,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
                                                             avgAskPrice : curPrice);
             qDebug() << _id << QString("buying %1 shares for avg %2 / limit %3 / cur %4").
                         arg((buyAmount-_persFundAmount)).arg(avgAskPrice).arg(maxAskPrice).arg(curPrice);
-            emit tradeAdvice(_id, false, buyAmount - _persFundAmount, gotAvgAskPrice ? maxAskPrice : curPrice);
+            emit tradeAdvice(_id, _tradePair, false, buyAmount - _persFundAmount, gotAvgAskPrice ? maxAskPrice : curPrice);
         }
     }
 }
@@ -148,15 +161,15 @@ QString StrategyRSINoLoss::onNewBotMessage(const QString &msg)
         double amount = params[1].toDouble();
         double limit = params[3].toDouble();
         // expect msg buy|sell <amount> tBTCUSD <limit>
-        if (params[2].compare("tBTCUSD")!=0)
-            return toRet.append("only supporting currency tBTCUSD for now!");
+        if (params[2].compare(_tradePair)!=0)
+            return toRet.append(QString("wrong currency pair %1. I'm trading only %2!").arg(params[2]).arg(_tradePair));
         if (doBuy) {
             _valueBought += amount * limit;
         } else {
             _valueSold += amount * limit;
         }
         _waitForFundsUpdate = true;
-        emit tradeAdvice(_id, !doBuy, amount, limit);
+        emit tradeAdvice(_id, _tradePair, !doBuy, amount, limit);
         return toRet.append(QString("%1 %2 %3 for limit %4").arg(doBuy ? "buying" : "selling").arg(amount).arg(params[2]).arg(limit));
 
     }

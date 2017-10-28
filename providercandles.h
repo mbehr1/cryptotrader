@@ -7,6 +7,8 @@
 
 #include "channel.h"
 
+static QString unset("unset");
+
 class ProviderCandles : public QObject
 {
     Q_OBJECT
@@ -14,6 +16,7 @@ public:
     explicit ProviderCandles(std::shared_ptr<ChannelTrades> exchange, QObject *parent = 0);
 
     void printCandles(bool details) const;
+    const QString &tradePair() const { return _channel ? _channel->symbol() : unset; }
     typedef std::chrono::system_clock::time_point TimePoint;
 
     class CandlesItem

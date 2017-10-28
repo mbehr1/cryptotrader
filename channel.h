@@ -15,6 +15,8 @@ public:
     virtual bool handleChannelData(const QJsonArray &data);
     virtual QString getStatusMsg() const { return QString("Channel %1 (%2 %3):").arg(_channel).arg(_isSubscribed ? "s" : "u").arg(_isTimeout ? "TO" : "OK"); }
 
+    const QString &pair() const { return _pair; }
+    const QString &symbol() const { return _symbol; }
 signals:
     void dataUpdated();
     void timeout(int id, bool isTimeout);

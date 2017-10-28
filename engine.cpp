@@ -98,48 +98,61 @@ Engine::~Engine()
 
 void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
 {
-    qDebug() << __PRETTY_FUNCTION__ << channel->_id << channel->_symbol;
-    if (!_providerCandles && channel->_channel.compare("trades")==0) {
-        _providerCandles = std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(channel), this);
+    qDebug() << __PRETTY_FUNCTION__ << channel->_id <<channel->_channel << channel->_symbol << channel->_pair;
+    if (!_providerCandlesMap[channel->_symbol] && channel->_channel.compare("trades")==0) {
+        _providerCandlesMap[channel->_symbol] = std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(channel), this);
 
         // we can setup the strategies here as well:
+        if (channel->_symbol == "tBTGUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), 1000.0, 25, 59, _providerCandles, this);
-            if (_channelBook)
-                strategy1->setChannelBook(_channelBook);
-            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, bool,double,double)));
-            _strategies.push_front(strategy1);
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#4"), channel->_symbol, 50.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
+            if (_channelBookMap[channel->_symbol])
+                strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
+            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
+            _strategies.push_front(strategy3);
         }
+
+        if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), 500.0, 17, 65, _providerCandles, this);
-            if (_channelBook)
-                strategy2->setChannelBook(_channelBook);
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[channel->_symbol], this);
+            if (_channelBookMap[channel->_symbol])
+                strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
+            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
+            _strategies.push_front(strategy3);
+        }
+        if (channel->_symbol == "tBTCUSD")
+        {
+            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this);
+            if (_channelBookMap[channel->_symbol])
+                strategy2->setChannelBook(_channelBookMap[channel->_symbol]);
             connect(&(*strategy2), SIGNAL(tradeAdvice(QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, bool,double,double)));
             _strategies.push_front(strategy2);
         }
+        if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#3"), 100.0, 15, 67, _providerCandles, this);
-            if (_channelBook)
-                strategy3->setChannelBook(_channelBook);
-            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, bool, double, double)),
+            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this);
+            if (_channelBookMap[channel->_symbol])
+                strategy1->setChannelBook(_channelBookMap[channel->_symbol]);
+            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, bool,double,double)));
-            _strategies.push_front(strategy3);
+            _strategies.push_front(strategy1);
         }
 
     }
-    if (!_channelBook && channel->_channel.compare("book")==0) {
-        _channelBook = std::dynamic_pointer_cast<ChannelBooks>(channel);
+    if (!_channelBookMap[channel->_symbol] && channel->_channel.compare("book")==0) {
+        _channelBookMap[channel->_symbol] = std::dynamic_pointer_cast<ChannelBooks>(channel);
         for (auto &strategy : _strategies)
-            if (strategy)
-                strategy->setChannelBook(_channelBook);
+            if (strategy && strategy->tradePair() == channel->_symbol)
+                strategy->setChannelBook(_channelBookMap[channel->_symbol]);
     }
 }
 
 void Engine::onCandlesUpdated()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _providerCandles->getRSI14();
+    qDebug() << __PRETTY_FUNCTION__ << _providerCandlesMap.size();
 }
 
 void Engine::onChannelTimeout(int channelId, bool isTimeout)
@@ -164,20 +177,20 @@ void Engine::onSubscriberMsg(QString msg)
 }
 
 
-void Engine::onTradeAdvice(QString id, bool sell, double amount, double price)
+void Engine::onTradeAdvice(QString id, QString tradePair, bool sell, double amount, double price)
 {
-    qDebug() << __FUNCTION__ << id << (sell? "sell" : "buy") << amount << price;
+    qDebug() << __FUNCTION__ << id << (sell? "sell" : "buy") << amount << tradePair << price;
 
-    int ret = _exchange.newOrder("tBTCUSD", sell ? -amount : amount, price);
+    int ret = _exchange.newOrder(tradePair, sell ? -amount : amount, price);
     qDebug() << __FUNCTION__ << "ret=" << ret;
 
     if (ret>0)
-        _waitForFundsUpdateMap[ret] = FundsUpdateMapEntry(id, sell ? -amount : amount, price);
+        _waitForFundsUpdateMap[ret] = FundsUpdateMapEntry(id, tradePair, sell ? -amount : amount, price);
 
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("new order %5 (cid %4) raised: %1 %2 tBTCUSD at %3")
-                                      .arg(sell ? "sell" : "buy").arg(amount).arg(price).arg(ret).arg(id));
+            _telegramBot->sendMessage(s, QString("new order %5 (cid %4) raised: %1 %2 %6 at %3")
+                                      .arg(sell ? "sell" : "buy").arg(amount).arg(price).arg(ret).arg(id).arg(tradePair));
         }
     }
 }
@@ -188,7 +201,7 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
     auto it = _waitForFundsUpdateMap.find(cid);
     if (it != _waitForFundsUpdateMap.end()) {
         FundsUpdateMapEntry &entry = it->second;
-        qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << " got " << amount << price;
+        qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << entry._tradePair << " got " << amount << price;
         // update only the strategy with proper id
         for (auto &strategy : _strategies) {
             if (strategy && strategy->id() == entry._id) {
@@ -200,8 +213,8 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
                 }
             }
         }
-        const QString botMsg = QString("order completed %5 (cid %3): %1 tBTCUSD at %2 (%4)")
-                .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id);
+        const QString botMsg = QString("order completed %5 (cid %3): %1 %6 at %2 (%4)")
+                .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id).arg(entry._tradePair);
 
         it = _waitForFundsUpdateMap.erase(it);
         qDebug() << __PRETTY_FUNCTION__ << "_waitForFundsUpdateMap.size=" << _waitForFundsUpdateMap.size();

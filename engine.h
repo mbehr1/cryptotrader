@@ -25,24 +25,25 @@ signals:
 public slots:
     void onNewChannelSubscribed(std::shared_ptr<Channel> channel);
     void onCandlesUpdated();
-    void onTradeAdvice(QString id, bool sell, double amount, double price);
+    void onTradeAdvice(QString id, QString tradePair, bool sell, double amount, double price);
     void onOrderCompleted(int cid, double amount, double price, QString status);
     void onNewMessage(Telegram::Message msg);
     void onChannelTimeout(int channelId, bool isTimeout);
     void onSubscriberMsg(QString msg);
 protected:
     ExchangeBitfinex _exchange;
-    std::shared_ptr<ProviderCandles> _providerCandles;
-    std::shared_ptr<ChannelBooks> _channelBook;
+    std::map<QString, std::shared_ptr<ProviderCandles>> _providerCandlesMap; // by pair
+    std::map<QString, std::shared_ptr<ChannelBooks>> _channelBookMap; // by pair
     std::forward_list<std::shared_ptr<StrategyRSINoLoss>> _strategies;
 
     class FundsUpdateMapEntry
     {
     public:
         FundsUpdateMapEntry() : _id("invalid"), _amount(0.0), _price(0.0), _done(true) {}
-        FundsUpdateMapEntry(const QString &id, const double &amount, const double &price) :
-            _id(id), _amount(amount), _price(price), _done(false) {}
+        FundsUpdateMapEntry(const QString &id, const QString &tradePair, const double &amount, const double &price) :
+            _id(id), _tradePair(tradePair), _amount(amount), _price(price), _done(false) {}
         QString _id;
+        QString _tradePair;
         double _amount;
         double _price;
         bool _done;
