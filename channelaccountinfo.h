@@ -30,9 +30,34 @@ public:
     };
 
     typedef std::map<long long, TradeItem> TradeItemMap;
+
+    class Funding
+    {
+    public:
+        Funding(const QJsonArray &data);
+        Funding &operator=(const QJsonArray &data);
+
+        long long _id;
+        QString _symbol; // e.g. fBTC
+        QDateTime _created;
+        QDateTime _updated;
+        double _amount;
+        QString _status;
+        double _rate;
+        int _duration;
+        QDateTime _openend;
+        QDateTime _lastPayout;
+
+
+    };
+    typedef std::map<long long, Funding> FundingMap;
+
 protected:
     TradeItemMap _trades; // mapped by trade id
     std::map<QString, std::map<QString, double>> _wallet; // _wallet[type][cur]=amount
+    FundingMap _fundings; // mapped by funding id
+
+    void processFundUpdate(const QJsonArray &data);
 
 signals:
     void orderCompleted(int cid, double amount, double price, QString status);

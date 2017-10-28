@@ -28,6 +28,24 @@ QString ChannelAccountInfo::getStatusMsg() const
                 toRet.append(QString("   %1: %2\n").arg(cur.first).arg(cur.second));
             }
         }
+
+    toRet.append(" Fundings borrowed:\n");
+    if (!_fundings.size()) {
+        toRet.append("  empty\n");
+    } else
+        for (const auto &ft : _fundings) {
+            const Funding &fu = ft.second;
+            if (fu._status != "CLOSED") {
+                toRet.append(QString("  %1:").arg(ft.first));
+                toRet.append(QString("%1 %2 at %3%%")
+                             .arg(fu._amount)
+                             .arg(fu._symbol)
+                             .arg(fu._rate)
+                             );
+
+            }
+        }
+
     return toRet;
 }
 
@@ -99,6 +117,24 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                 }
                             }
                         }
+                        else if (action.startsWith("fl") || action.startsWith("fc")) {
+                            if (data.at(2).isArray()) {
+                                auto outarr = data.at(2).toArray();
+                                if (outarr.size()) {
+                                    // is it an array of arrays?
+                                    if (outarr.at(0).isArray()){
+                                        for (const auto &fu : outarr) {
+                                            if (fu.isArray())
+                                                processFundUpdate(fu.toArray());
+                                            else qDebug() << __PRETTY_FUNCTION__ << "can't handle array elem:" << action << data << fu;
+                                        }
+                                    } else {
+                                        // process single item
+                                        processFundUpdate(outarr);
+                                    }
+                                }
+                            } else qDebug() << __PRETTY_FUNCTION__ << "can't handle:" << action << data;
+                        }
                     else qDebug() << __PRETTY_FUNCTION__ << data;
         } else {
             qDebug() << __PRETTY_FUNCTION__ << data;
@@ -108,6 +144,23 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
         }
     } else return false;
     return true;
+}
+
+void ChannelAccountInfo::processFundUpdate(const QJsonArray &data)
+{
+    if (data.isEmpty()) return;
+    if (data.count()<13) return;
+    long long id = data.at(0).toDouble();
+    if (!id) return;
+    // search fund:
+    auto it = _fundings.find(id);
+    if (it != _fundings.end()) {
+        (*it).second.operator=(data);
+    } else {
+        // insert
+        Funding f(data);
+        _fundings.insert(std::make_pair(id, f));
+    }
 }
 
 ChannelAccountInfo::TradeItem::TradeItem(const QJsonArray &data)
@@ -147,6 +200,25 @@ ChannelAccountInfo::TradeItem &ChannelAccountInfo::TradeItem::operator =(const Q
     return *this;
 }
 
+ChannelAccountInfo::Funding::Funding(const QJsonArray &data)
+{
+    operator =(data);
+}
+
+ChannelAccountInfo::Funding &ChannelAccountInfo::Funding::operator =(const QJsonArray &data)
+{ // here we expect only the inner array with elem data. starting with id...
+  // data e.g. [47342332, "fUSD", 1, 151..., 151...., amount, 0, "active", null, null, null, rate, duration, 151...151..., 0, 0, null, 0, rate, 0, null]
+
+    _id = data.at(0).toDouble();
+    _symbol = data.at(1).toString();
+    // todo timestamps!
+    _amount = data.at(5).toDouble();
+    _status = data.at(7).toString();
+    _rate = data.at(11).toDouble();
+    _duration = data.at(12).toInt();
+
+    return *this;
+}
 
 
 /*
