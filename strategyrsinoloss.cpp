@@ -87,10 +87,12 @@ void StrategyRSINoLoss::onCandlesUpdated()
         // do we have enough margin yet?
         //qDebug() << _id << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
         if (avgBidPrice > (_persPrice * _marginFactor) && rsi > _rsiHold) {
-            // sell all
+            // sell all except the expected trading fee: (0.1%)
+            double amountToSell = _persFundAmount * 0.999;
             _waitForFundsUpdate = true;
-            _valueSold += _persFundAmount * avgBidPrice;
-            emit tradeAdvice(_id, _tradePair, true, _persFundAmount, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
+            _valueSold += amountToSell * avgBidPrice;
+            _persFundAmount = amountToSell; // we loose this anyhow due to fees
+            emit tradeAdvice(_id, _tradePair, true, amountToSell, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
         }
     } else {
         _lastPrice = avgAskPrice;
@@ -113,8 +115,10 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
     qDebug() << _id << "old data:" << _persFundAmount << _persPrice;
     double oldValue = _persFundAmount * _persPrice;
     _persFundAmount += amount;
+    if (_persFundAmount < 0.0000001)
+        _persFundAmount = 0.0;
     oldValue += (amount * price);
-    _persPrice = (_persFundAmount != 0.0) ? (oldValue / _persFundAmount) : 0.0;
+    _persPrice = (_persFundAmount >= 0.0000001) ? (oldValue / _persFundAmount) : 0.0;
     _settings.setValue("FundAmount", _persFundAmount);
     _settings.setValue("Price", _persPrice);
     _settings.sync();

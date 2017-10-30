@@ -114,7 +114,7 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
         // we can setup the strategies here as well:
         if (channel->_symbol == "tBTGUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#4"), channel->_symbol, 50.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#4"), channel->_symbol, 100.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
             connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
