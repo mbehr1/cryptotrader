@@ -61,6 +61,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
         set.sync();
     }
 
+    _lastTelegramMsgId = set.value("LastTelegramMsgId", 0).toUInt();
+
     // start telegram bot:
     _telegramBot = std::make_shared<Telegram::Bot>(telegramToken, true, 500, 1 );
     connect(&(*_telegramBot), &Telegram::Bot::message, this,
@@ -91,10 +93,15 @@ Engine::Engine(QObject *parent) : QObject(parent)
 Engine::~Engine()
 {
     // say goodbye
-    if (_telegramBot)
+    if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
             _telegramBot->sendMessage(s, QString("goodbye! cryptotrader is stopping."));
         }
+        _telegramBot = 0; // delete already here to prevent. destructor processes pending events (might not work as the shared_ptr might be used in other classes
+    }
+    // store last telegram id:
+    QSettings set("mcbehr.de", "cryptotrader_engine");
+    set.setValue("LastTelegramMsgId", _lastTelegramMsgId);
 
 }
 
@@ -129,8 +136,8 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
             std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy2->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy2), SIGNAL(tradeAdvice(QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, bool,double,double)));
+            connect(&(*strategy2), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
             _strategies.push_front(strategy2);
         }
         if (channel->_symbol == "tBTCUSD")
@@ -138,8 +145,8 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
             std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy1->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, bool,double,double)));
+            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
             _strategies.push_front(strategy1);
         }
 
@@ -244,7 +251,13 @@ void Engine::onOrderCompleted(int cid, double amount, double price, QString stat
 
 void Engine::onNewMessage(Telegram::Message msg)
 {
-    qDebug() << __FUNCTION__ << msg;
+    qDebug() << __FUNCTION__ << msg << msg.string;
+    if (msg.id <= _lastTelegramMsgId) {
+        qWarning() << "old telegram msgs skipped! Expecting id >" << _lastTelegramMsgId;
+        return;
+    } else
+        _lastTelegramMsgId = msg.id;
+
     if (_telegramBot && msg.type == Telegram::Message::TextType) {
         if (msg.string.compare("subscribe")==0) {
             if (_telegramSubscribers.find(msg.from.id) == _telegramSubscribers.end())

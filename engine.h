@@ -53,6 +53,7 @@ protected:
     std::map<int, FundsUpdateMapEntry> _waitForFundsUpdateMap;
     std::shared_ptr<Telegram::Bot> _telegramBot;
     std::set<int> _telegramSubscribers;
+    unsigned int _lastTelegramMsgId;
 };
 
 #endif // ENGINE_H
