@@ -11,26 +11,28 @@ class StrategyRSINoLoss : public QObject
 {
     Q_OBJECT
 public:
-    explicit StrategyRSINoLoss(const QString &id, const QString &tradePair, const double &buyValue,
+    explicit StrategyRSINoLoss(const QString &exchange, const QString &id, const QString &tradePair, const double &buyValue,
                                const double &rsiBuy, const double &rsiHold,
                                std::shared_ptr<ProviderCandles> provider, QObject *parent = 0);
-
+    virtual ~StrategyRSINoLoss();
     void setChannelBook(std::shared_ptr<ChannelBooks> book);
     QString getStatusMsg() const;
     const QString &id() const { return _id; }
     const QString &tradePair() const { return _tradePair; }
     QString onNewBotMessage(const QString &msg);
 signals:
-    void tradeAdvice(QString id, QString tradePair, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
+    void tradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
 public slots:
     void onCandlesUpdated();
     void onFundsUpdated(double amount, double price);
 protected:
+    QString _exchange;
     QString _id;
     QString _tradePair; // e.g. tBTCUSD
     bool _generateMakerPrices;
     std::shared_ptr<ProviderCandles> _providerCandles;
     std::shared_ptr<ChannelBooks> _channelBook;
+    bool _paused;
     bool _waitForFundsUpdate;
 
     double _valueBought;

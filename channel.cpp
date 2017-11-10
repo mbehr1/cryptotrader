@@ -1,7 +1,8 @@
 #include <cassert>
 #include <chrono>
+#include <QDateTime>
 #include <QDebug>
-#include <QJsonArray>
+#include <QJsonValueRef>
 
 #include "channel.h"
 
@@ -62,6 +63,18 @@ bool Channel::handleChannelData(const QJsonArray &data)
         }
     return false;
     */
+}
+
+bool Channel::handleDataFromBitFlyer(const QJsonObject &data)
+{
+    (void)data;
+    _lastMsg = QDateTime::currentDateTime();
+    if (_isTimeout) {
+        _isTimeout = false;
+        qWarning() << "channel (" << _id << ") seems back!";
+        emit timeout(_id, _isTimeout);
+    }
+    return true;
 }
 
 bool greater(const double &a, const double &b)
@@ -128,6 +141,58 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
                 //qDebug() << "bids count=" << _bids.size() << " asks count=" << _asks.size();
                 //printAsksBids();
             }
+        emit dataUpdated();
+        return true;
+    } else return false;
+}
+
+bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
+{
+    if (Channel::handleDataFromBitFlyer(data)) {
+        //qDebug() << __PRETTY_FUNCTION__ << data;
+
+        // process asks
+        const QJsonValue &asks = data["asks"];
+        if (asks.isArray()) {
+            const auto &arr = asks.toArray();
+            for (const auto &a : arr) {
+                // expect price and size
+                if (a.isObject()) {
+                    const auto &o = a.toObject();
+                    double price = o["price"].toDouble();
+                    double size = o["size"].toDouble();
+                    if (size>=0.0)
+                        handleSingleEntry(price, 1, size);
+                    else
+                        qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
+                } else
+                    qWarning() << __PRETTY_FUNCTION__ << "a no obj" << a;
+            }
+        } else {
+            qWarning() << __PRETTY_FUNCTION__ << "can't handle asks:" << asks << data;
+        }
+        // process bids
+        const QJsonValue &bids = data["bids"];
+        if (bids.isArray()) {
+            const auto &arr = bids.toArray();
+            for (const auto &a : arr) {
+                // expect price and size
+                if (a.isObject()) {
+                    const auto &o = a.toObject();
+                    double price = o["price"].toDouble();
+                    double size = o["size"].toDouble();
+                    if (size>=0.0)
+                        handleSingleEntry(price, 1, -size);
+                    else
+                        qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
+                } else
+                    qWarning() << __PRETTY_FUNCTION__ << "a no obj" << a;
+            }
+        } else {
+            qWarning() << __PRETTY_FUNCTION__ << "can't handle bids:" << asks << data;
+        }
+        // call handleSingleEntry here. amount < 0 -> for bids, > 0 for ask, count = 0 to delete, count = 1 to update
+
         emit dataUpdated();
         return true;
     } else return false;
@@ -278,6 +343,28 @@ bool ChannelTrades::handleChannelData(const QJsonArray &data)
                 //printTrades();
                 emit dataUpdated();
             }
+        return true;
+    } else return false;
+}
+
+
+bool ChannelTrades::handleDataFromBitFlyer(const QJsonObject &data)
+{
+    if (Channel::handleDataFromBitFlyer(data)) {
+        // qDebug() << __PRETTY_FUNCTION__ << data;
+
+        int id = data["id"].toInt();
+        // side (SELL/BUY)
+        double price = data["price"].toDouble();
+        double amount = data["size"].toDouble(); // always positive
+        QString exec_date = data["exec_date"].toString();
+        // convert exec_date to mts (milliseconds) todo, e.g. 2017-10-31T19:46:14.9227963Z
+        QDateTime execdt = QDateTime::fromString(exec_date, Qt::ISODate);
+        //qDebug() << __PRETTY_FUNCTION__ << execdt << execdt.toLocalTime();
+        long long mts = execdt.toMSecsSinceEpoch();
+        handleSingleEntry(id, mts, amount, price);
+
+        emit dataUpdated();
         return true;
     } else return false;
 }

@@ -2,6 +2,8 @@
 #define CHANNEL_H
 #include <QObject>
 #include <QDateTime>
+#include <QJsonObject>
+#include <QJsonArray>
 
 class ExchangeBitfinex;
 class Engine;
@@ -13,6 +15,7 @@ public:
     Channel(int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed=true);
     virtual ~Channel();
     virtual bool handleChannelData(const QJsonArray &data);
+    virtual bool handleDataFromBitFlyer(const QJsonObject &data);
     virtual QString getStatusMsg() const { return QString("Channel %1 (%2 %3):").arg(_channel).arg(_isSubscribed ? "s" : "u").arg(_isTimeout ? "TO" : "OK"); }
 
     const QString &pair() const { return _pair; }
@@ -42,6 +45,7 @@ public:
     ChannelBooks(int id, const QString &symbol);
     virtual ~ChannelBooks();
     virtual bool handleChannelData(const QJsonArray &data) override;
+    virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;
 
     bool getPrices(bool ask, const double &amount, double &avg, double &limit) const; // determine at which price I could see the amount
 
@@ -70,6 +74,7 @@ public:
     ChannelTrades(int id, const QString &symbol, const QString &pair);
     virtual ~ChannelTrades();
     virtual bool handleChannelData(const QJsonArray &data) override;
+    virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;
 
     class TradesItem
     {

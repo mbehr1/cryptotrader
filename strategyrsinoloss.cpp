@@ -5,12 +5,14 @@
 #include "strategyrsinoloss.h"
 #include "providercandles.h"
 
-StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const QString &tradePair, const double &buyValue,
+StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id, const QString &tradePair, const double &buyValue,
                                      const double &rsiBuy, const double &rsiHold, std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
+  , _exchange(exchange)
   , _id(id)
   , _tradePair(tradePair)
   , _generateMakerPrices(true)
   , _providerCandles(provider)
+  , _paused(false)
   , _waitForFundsUpdate(false) // we could use this as initial trigger?
   , _valueBought(0.0)
   , _valueSold(0.0)
@@ -23,6 +25,8 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const QString &tradePair
 {
     _persFundAmount = _settings.value("FundAmount", (double)0.0).toDouble();
     _persPrice = _settings.value("Price", 0.0).toDouble();
+    _paused = _settings.value("paused", false).toBool();
+    _waitForFundsUpdate = _settings.value("waitForFundsUpdate", false).toBool();
     qDebug() << __PRETTY_FUNCTION__ << _id << _tradePair << "got" << _persFundAmount << "bought at " << _persPrice;
     if (_providerCandles) {
         qDebug() << "providerCandles tradePair=" << _providerCandles->tradePair();
@@ -30,6 +34,14 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &id, const QString &tradePair
     }
     connect(&(*_providerCandles), SIGNAL(dataUpdated()),
             this, SLOT(onCandlesUpdated()));
+}
+
+StrategyRSINoLoss::~StrategyRSINoLoss()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _id;
+    _settings.setValue("paused", _paused);
+    _settings.setValue("waitForFundsUpdate", _waitForFundsUpdate);
+    // FundAmount and Price already set
 }
 
 void StrategyRSINoLoss::setChannelBook(std::shared_ptr<ChannelBooks> book)
@@ -40,6 +52,7 @@ void StrategyRSINoLoss::setChannelBook(std::shared_ptr<ChannelBooks> book)
 
 void StrategyRSINoLoss::onCandlesUpdated()
 {
+    if (_paused) return;
     double rsi = _providerCandles->getRSI14();
     _lastRSI = rsi;
     double curPrice = _providerCandles->candles().begin()->second._close;
@@ -92,7 +105,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
             _waitForFundsUpdate = true;
             _valueSold += amountToSell * avgBidPrice;
             _persFundAmount = amountToSell; // we loose this anyhow due to fees
-            emit tradeAdvice(_id, _tradePair, true, amountToSell, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
+            emit tradeAdvice(_exchange, _id, _tradePair, true, amountToSell, gotAvgBidPrice ? minBidPrice : avgBidPrice); // todo add sanity check that minBidPrice is not too low! (no loss)
         }
     } else {
         _lastPrice = avgAskPrice;
@@ -104,7 +117,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
                                                             avgAskPrice : curPrice);
             qDebug() << _id << QString("buying %1 shares for avg %2 / limit %3 / cur %4").
                         arg((buyAmount-_persFundAmount)).arg(avgAskPrice).arg(maxAskPrice).arg(curPrice);
-            emit tradeAdvice(_id, _tradePair, false, buyAmount - _persFundAmount, gotAvgAskPrice ? maxAskPrice : curPrice);
+            emit tradeAdvice(_exchange, _id, _tradePair, false, buyAmount - _persFundAmount, gotAvgAskPrice ? maxAskPrice : curPrice);
         }
     }
 }
@@ -130,9 +143,11 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
 QString StrategyRSINoLoss::getStatusMsg() const
 {
     QString msg;
-    msg.append(QString("StrategyRSINoLoss%1:\n").arg(_id));
+    msg.append(QString("RSINoLoss%1 on %2:\n").arg(_id).arg(_exchange));
     msg.append(QString(" amount bought: %1\n").arg(_persFundAmount));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
+    if (_paused)
+        msg.append(QString(" paused! "));
     if (_waitForFundsUpdate) {
         msg.append(QString(" waiting for last order to finish\n"));
     } else {
@@ -173,9 +188,25 @@ QString StrategyRSINoLoss::onNewBotMessage(const QString &msg)
             _valueSold += amount * limit;
         }
         _waitForFundsUpdate = true;
-        emit tradeAdvice(_id, _tradePair, !doBuy, amount, limit);
+        emit tradeAdvice(_exchange, _id, _tradePair, !doBuy, amount, limit);
         return toRet.append(QString("%1 %2 %3 for limit %4").arg(doBuy ? "buying" : "selling").arg(amount).arg(params[2]).arg(limit));
 
+    }
+    else if (msg.compare("pause")==0) {
+        if (!_paused) {
+            _paused = true;
+            toRet.append("paused!");
+        } else
+            toRet.append("already paused!");
+        return toRet;
+    }
+    else if (msg.compare("resume")==0) {
+        if (_paused) {
+            _paused = false;
+            toRet.append("resumed.");
+        } else
+            toRet.append("wasn't paused yet!");
+        return toRet;
     }
     else {
         return toRet.append(QString("don't know what to do with <%1>!").arg(msg));

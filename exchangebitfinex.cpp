@@ -12,7 +12,7 @@
 #include <QSettings>
 
 ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
-    QObject(parent), _isConnected(false), _isAuth(false), _checkConnectionTimer(this),
+    Exchange(parent), _checkConnectionTimer(this),
     _settings("mcbehr.de", "cryptotrader_exchangebitfinex")
 {
 
@@ -55,8 +55,8 @@ ExchangeBitfinex::~ExchangeBitfinex()
 
 QString ExchangeBitfinex::getStatusMsg() const
 {
-    QString toRet = QString("ExchangeBitfinex (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
-            .arg(_isAuth ? "AU" : "not authenticated!");
+    QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
+            .arg(_isAuth ? "AU" : "not authenticated!").arg(name());
 
     toRet.append(QString("\n %1").arg(_accountInfoChannel.getStatusMsg()));
     return toRet;

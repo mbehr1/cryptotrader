@@ -8,7 +8,7 @@
 #include <set>
 #include "qttelegrambot.h"
 
-#include "exchangebitfinex.h"
+#include "exchange.h"
 #include "providercandles.h"
 #include "strategyrsinoloss.h"
 #include "channel.h"
@@ -25,14 +25,15 @@ signals:
 public slots:
     void onNewChannelSubscribed(std::shared_ptr<Channel> channel);
     void onCandlesUpdated();
-    void onTradeAdvice(QString id, QString tradePair, bool sell, double amount, double price);
+    void onTradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price);
     void onOrderCompleted(int cid, double amount, double price, QString status);
     void onWalletUpdate(QString type, QString cur, double value, double delta);
     void onNewMessage(Telegram::Message msg);
     void onChannelTimeout(int channelId, bool isTimeout);
     void onSubscriberMsg(QString msg);
 protected:
-    ExchangeBitfinex _exchange;
+    //ExchangeBitfinex _exchange;
+    std::map<QString, std::shared_ptr<Exchange>> _exchanges;
     std::map<QString, std::shared_ptr<ProviderCandles>> _providerCandlesMap; // by pair
     std::map<QString, std::shared_ptr<ChannelBooks>> _channelBookMap; // by pair
     std::forward_list<std::shared_ptr<StrategyRSINoLoss>> _strategies;

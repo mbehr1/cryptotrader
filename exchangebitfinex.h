@@ -10,18 +10,22 @@
 #include <QtWebSockets/QtWebSockets>
 class QSettings;
 
+#include "exchange.h"
 #include "channel.h"
 #include "channelaccountinfo.h"
 
-class ExchangeBitfinex : public QObject
+static QString bitfinexName = "Bitfinex";
+
+class ExchangeBitfinex : public Exchange
 {
     Q_OBJECT
 public:
     ExchangeBitfinex(QObject *parent = Q_NULLPTR);
     ExchangeBitfinex(const ExchangeBitfinex &) = delete;
-    ~ExchangeBitfinex();
+    virtual ~ExchangeBitfinex();
+    const QString &name() const { return bitfinexName; }
     void setAuthData(const QString &api, const QString &skey);
-    QString getStatusMsg() const;
+    QString getStatusMsg() const override;
     bool subscribeChannel(const QString &channelName, const QString &symbol,
                           const std::map<QString, QString> &options=std::map<QString, QString>());
 
@@ -30,14 +34,8 @@ public:
                   const double &price,
                   const QString &type="EXCHANGE LIMIT", // LIMIT,...
                   int hidden=0
-                  );
+                  ) override;
 signals:
-    void channelDataUpdated(int channelId);
-    void newChannelSubscribed(std::shared_ptr<Channel> channel);
-    void orderCompleted(int cid, double amount, double price, QString status);
-    void walletUpdate(QString type, QString cur, double value, double delta);
-    void channelTimeout(int channelId, bool isTimeout);
-    void subscriberMsg(QString msg);
 
 private Q_SLOTS:
     void onConnected();
@@ -58,8 +56,6 @@ private:
     int getNextCid();
 
     QWebSocket _ws;
-    bool _isConnected;
-    bool _isAuth;
     QString _apiKey;
     QString _sKey;
     QTimer _checkConnectionTimer;

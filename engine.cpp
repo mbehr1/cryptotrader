@@ -7,6 +7,8 @@
 #include <QTextStream>
 #include "engine.h"
 #include "signal.h"
+#include "exchangebitfinex.h"
+#include "exchangebitflyer.h"
 
 QString queryFromStdin(const QString &query)
 {
@@ -23,7 +25,6 @@ QString queryFromStdin(const QString &query)
 }
 
 Engine::Engine(QObject *parent) : QObject(parent)
-  ,_exchange(this)
 {
     // read telegram token from settings
     QSettings set("mcbehr.de", "cryptotrader_engine");
@@ -74,20 +75,50 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _telegramBot->sendMessage(QVariant((int)s), QString("welcome back. cryptotrader just started."));
     }
 
+    if(1){ // create Bitfinex exchange todo for test only disabled!
+        auto exchange = std::make_shared<ExchangeBitfinex>(this);
+        ExchangeBitfinex &_exchange = *(exchange.get());
+        connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
+        connect(&_exchange, SIGNAL(channelTimeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
 
-    connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
-    connect(&_exchange, SIGNAL(channelTimeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
+        connect(&_exchange, SIGNAL(orderCompleted(int,double,double,QString)),
+                this, SLOT(onOrderCompleted(int,double,double,QString)));
+        connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
+                this, SLOT(onNewChannelSubscribed(std::shared_ptr<Channel>)));
+        connect(&_exchange, SIGNAL(walletUpdate(QString,QString,double,double)),
+                this, SLOT(onWalletUpdate(QString,QString,double,double)), Qt::QueuedConnection);
+        // todo subscribe channels here only (needs connect or queue or ...)
 
-    connect(&_exchange, SIGNAL(orderCompleted(int,double,double,QString)),
-            this, SLOT(onOrderCompleted(int,double,double,QString)));
-    connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
-            this, SLOT(onNewChannelSubscribed(std::shared_ptr<Channel>)));
-    connect(&_exchange, SIGNAL(walletUpdate(QString,QString,double,double)),
-            this, SLOT(onWalletUpdate(QString,QString,double,double)), Qt::QueuedConnection);
-    // todo subscribe channels here only (needs connect or queue or ...)
+        _exchange.setAuthData(bitfinexKey, bitfinexSKey);
+        bitfinexSKey.fill(QChar('x'), bitfinexSKey.length()); // overwrite in memory
+        assert(_exchanges.find(exchange->name()) == _exchanges.end());
+        _exchanges.insert(std::make_pair(exchange->name(), exchange));
+    }
 
-    _exchange.setAuthData(bitfinexKey, bitfinexSKey);
-    bitfinexSKey.fill(QChar('x'), bitfinexSKey.length()); // overwrite in memory
+    if(0){ // create bitFlyer exchange
+        auto exchange = std::make_shared<ExchangeBitFlyer>(this);
+
+        // todo configure
+
+        assert(_exchanges.find(exchange->name()) == _exchanges.end());
+        _exchanges.insert(std::make_pair(exchange->name(), exchange));
+
+        // for bitFlyer we allocate them static
+        _providerCandlesMap["FX_BTC_JPY"] =
+                std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(exchange->getChannel(ExchangeBitFlyer::Trades)), this);
+
+
+        // and we can configure the strategy here as well:
+        {
+            std::shared_ptr<StrategyRSINoLoss> strategy5 =
+                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 10000.0, 17, 59, _providerCandlesMap["FX_BTC_JPY"], this);
+            strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel(ExchangeBitFlyer::Book)));
+            connect(&(*strategy5), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+            _strategies.push_front(strategy5);
+        }
+
+    }
 }
 
 Engine::~Engine()
@@ -114,39 +145,39 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
         // we can setup the strategies here as well:
         if (channel->_symbol == "tBTGUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#4"), channel->_symbol, 100.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#4"), channel->_symbol, 50.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
+            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
             _strategies.push_front(strategy3);
         }
 
         if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
+            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
             _strategies.push_front(strategy3);
         }
         if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy2->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy2), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
+            connect(&(*strategy2), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
             _strategies.push_front(strategy2);
         }
         if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy1->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, bool,double,double)));
+            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
             _strategies.push_front(strategy1);
         }
 
@@ -196,11 +227,12 @@ void Engine::onSubscriberMsg(QString msg)
 }
 
 
-void Engine::onTradeAdvice(QString id, QString tradePair, bool sell, double amount, double price)
+void Engine::onTradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price)
 {
-    qDebug() << __FUNCTION__ << id << (sell? "sell" : "buy") << amount << tradePair << price;
+    qDebug() << __FUNCTION__ << exchange << id << (sell? "sell" : "buy") << amount << tradePair << price;
 
-    int ret = _exchange.newOrder(tradePair, sell ? -amount : amount, price);
+    assert(_exchanges[exchange]);
+    int ret = _exchanges[exchange]->newOrder(tradePair, sell ? -amount : amount, price);
     qDebug() << __FUNCTION__ << "ret=" << ret;
 
     if (ret>0)
@@ -291,7 +323,9 @@ void Engine::onNewMessage(Telegram::Message msg)
         }
         else
         if (msg.string.compare("status")==0) {
-            _telegramBot->sendMessage(msg.from.id, _exchange.getStatusMsg(), false, false, msg.id);
+            for (auto &exchange : _exchanges)
+                _telegramBot->sendMessage(msg.from.id, exchange.second->getStatusMsg(), false, false, msg.id);
+
             for (auto &strategy : _strategies) {
                 if (strategy) {
                     QString status = strategy->getStatusMsg();
@@ -303,6 +337,14 @@ void Engine::onNewMessage(Telegram::Message msg)
         if (msg.string.compare("restart")==0) {
             _telegramBot->sendMessage(msg.from.id, "restarting with SIGHUP",false, false, msg.id);
             raise(SIGHUP);
+        }
+        else
+            if (msg.string.compare("pause")==0||msg.string.compare("resume")) { // msgs to pass to strategies
+            QString answer;
+            for (auto &strategy : _strategies) {
+                answer.append( strategy->onNewBotMessage(msg.string) );
+            }
+            _telegramBot->sendMessage(msg.from.id, answer, false, false, msg.id);
         }
         else
         if (msg.string.startsWith("#")) { // send to a single strategy

@@ -13,13 +13,22 @@ TEMPLATE = app
 
 include($$PWD/lib/QtTelegramBot/QtTelegramBot.pri)
 
+INCLUDEPATH += $$PWD/lib/PubNubQtSync/PubNubQtSync
+INCLUDEPATH += $$PWD/lib/PubNubQtSync/c-core/core
+DEPENDPATH += $$PWD/lib/PubNubQtSync/c-core/core
+HEADERS += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.h
+SOURCES += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.cpp $$PWD/lib/PubNubQtSync/c-core/core/pubnub_ccore.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_assert_std.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_json_parse.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_helper.c
+
+
 SOURCES += main.cpp \
     exchangebitfinex.cpp \
     providercandles.cpp \
     channel.cpp \
     engine.cpp \
     strategyrsinoloss.cpp \
-    channelaccountinfo.cpp
+    channelaccountinfo.cpp \
+    exchange.cpp \
+    exchangebitflyer.cpp
 
 HEADERS += \
     exchangebitfinex.h \
@@ -27,6 +36,8 @@ HEADERS += \
     channel.h \
     engine.h \
     strategyrsinoloss.h \
-    channelaccountinfo.h
+    channelaccountinfo.h \
+    exchange.h \
+    exchangebitflyer.h
 
 LIBS += -lta_lib
