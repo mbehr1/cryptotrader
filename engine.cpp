@@ -339,7 +339,7 @@ void Engine::onNewMessage(Telegram::Message msg)
             raise(SIGHUP);
         }
         else
-            if (msg.string.compare("pause")==0||msg.string.compare("resume")) { // msgs to pass to strategies
+            if (msg.string.compare("pause")==0||msg.string.compare("resume")==0) { // msgs to pass to strategies
             QString answer;
             for (auto &strategy : _strategies) {
                 answer.append( strategy->onNewBotMessage(msg.string) );
