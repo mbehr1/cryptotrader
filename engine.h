@@ -26,7 +26,7 @@ public slots:
     void onNewChannelSubscribed(std::shared_ptr<Channel> channel);
     void onCandlesUpdated();
     void onTradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price);
-    void onOrderCompleted(int cid, double amount, double price, QString status);
+    void onOrderCompleted(QString exchange, int cid, double amount, double price, QString status);
     void onWalletUpdate(QString type, QString cur, double value, double delta);
     void onNewMessage(Telegram::Message msg);
     void onChannelTimeout(int channelId, bool isTimeout);
@@ -51,7 +51,7 @@ protected:
         bool _done;
     };
 
-    std::map<int, FundsUpdateMapEntry> _waitForFundsUpdateMap;
+    std::map<QString, std::map<int, FundsUpdateMapEntry>> _waitForFundsUpdateMaps; // exchange and cid
     std::shared_ptr<Telegram::Bot> _telegramBot;
     std::set<int> _telegramSubscribers;
     unsigned int _lastTelegramMsgId;

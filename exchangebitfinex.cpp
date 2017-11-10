@@ -227,7 +227,7 @@ void ExchangeBitfinex::onTextMessageReceived(const QString &message)
 void ExchangeBitfinex::onOrderCompleted(int cid, double amount, double price, QString status)
 {
     qDebug() << __PRETTY_FUNCTION__ << cid << amount << price << status;
-    emit orderCompleted(cid, amount, price, status);
+    emit orderCompleted(name(), cid, amount, price, status);
 }
 
 void ExchangeBitfinex::onSslErrors(const QList<QSslError> &errors)
