@@ -249,7 +249,7 @@ void Engine::onTradeAdvice(QString exchange, QString id, QString tradePair, bool
 void Engine::onOrderCompleted(QString exchange, int cid, double amount, double price, QString status)
 {
     auto &waitForFundsUpdateMap = _waitForFundsUpdateMaps[exchange];
-    qDebug() << __PRETTY_FUNCTION__ << cid << amount << price << status << waitForFundsUpdateMap.size();
+    qDebug() << __PRETTY_FUNCTION__ << exchange << cid << amount << price << status << waitForFundsUpdateMap.size();
     auto it = waitForFundsUpdateMap.find(cid);
     if (it != waitForFundsUpdateMap.end()) {
         FundsUpdateMapEntry &entry = it->second;
@@ -278,7 +278,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
         }
 
     } else {
-        qWarning() << "ignored order complete!" << cid << amount << price << status;
+        qWarning() << "ignored order complete!" << exchange << cid << amount << price << status;
     }
 }
 
