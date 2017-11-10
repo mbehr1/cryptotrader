@@ -195,17 +195,17 @@ QString StrategyRSINoLoss::onNewBotMessage(const QString &msg)
     else if (msg.compare("pause")==0) {
         if (!_paused) {
             _paused = true;
-            toRet.append("paused!");
+            toRet.append("paused!\n");
         } else
-            toRet.append("already paused!");
+            toRet.append("already paused!\n");
         return toRet;
     }
     else if (msg.compare("resume")==0) {
         if (_paused) {
             _paused = false;
-            toRet.append("resumed.");
+            toRet.append("resumed.\n");
         } else
-            toRet.append("wasn't paused yet!");
+            toRet.append("wasn't paused yet!\n");
         return toRet;
     }
     else {
