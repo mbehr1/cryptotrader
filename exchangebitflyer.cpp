@@ -72,6 +72,11 @@ ExchangeBitFlyer::~ExchangeBitFlyer()
     _timer.stop();
 }
 
+void ExchangeBitFlyer::reconnect()
+{
+    // nothing yet. todo
+}
+
 std::shared_ptr<Channel> ExchangeBitFlyer::getChannel(CHANNELTYPE type) const
 {
     std::shared_ptr<Channel> toRet;

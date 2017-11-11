@@ -384,6 +384,12 @@ void Engine::onNewMessage(Telegram::Message msg)
             _telegramBot->sendMessage(msg.from.id, answer, false, false, msg.id);
         }
         else
+        if (msg.string.compare("reconnect")==0) {
+            for (auto &exchange : _exchanges)
+                exchange.second->reconnect();
+            _telegramBot->sendMessage(msg.from.id, QString("reconnecting..."), false, false, msg.id);
+        }
+        else
         if (msg.string.startsWith("#")) { // send to a single strategy
             for (auto &strategy : _strategies) {
                 if (msg.string.startsWith(QString("%1 ").arg(strategy->id()))) { // we want e.g. "#1 status"

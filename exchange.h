@@ -21,7 +21,7 @@ public:
             ) = 0;
 
     virtual QString getStatusMsg() const = 0;
-
+    virtual void reconnect() = 0;
 signals:
     void exchangeStatus(QString, bool isMaintenance, bool isStopped);
     void channelDataUpdated(int channelId);

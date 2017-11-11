@@ -29,6 +29,7 @@ public:
                   const QString &type="EXCHANGE LIMIT", // LIMIT,...
                   int hidden=0
                   ) override;
+    virtual void reconnect() override;
 
     typedef enum {Book=0, Trades} CHANNELTYPE;
     std::shared_ptr<Channel> getChannel(CHANNELTYPE type) const;

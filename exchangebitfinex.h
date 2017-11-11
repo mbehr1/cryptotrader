@@ -35,6 +35,8 @@ public:
                   const QString &type="EXCHANGE LIMIT", // LIMIT,...
                   int hidden=0
                   ) override;
+    virtual void reconnect() override;
+
 signals:
 
 private Q_SLOTS:
@@ -47,6 +49,7 @@ private Q_SLOTS:
     void onChannelTimeout(int id, bool isTimeout);
 
 private:
+    void disconnectWS();
     bool sendAuth(const QString &apiKey, const QString &skey);
     void parseJson(const QString &msg);
     void handleAuthEvent(const QJsonObject &obj);

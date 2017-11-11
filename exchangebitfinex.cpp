@@ -53,6 +53,11 @@ ExchangeBitfinex::~ExchangeBitfinex()
     disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBitfinex::onDisconnected);
 }
 
+void ExchangeBitfinex::reconnect()
+{
+    disconnectWS();
+}
+
 QString ExchangeBitfinex::getStatusMsg() const
 {
     QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
@@ -78,6 +83,39 @@ void ExchangeBitfinex::connectWS()
 
     QString url("wss://api2.bitfinex.com:3000/ws/2");
     _ws.open(QUrl(url));
+}
+
+void ExchangeBitfinex::disconnectWS()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (!_isConnected) return;
+    _ws.close();
+    // we don't set this here but wait for disconnected signal _isConnected = false;
+    _isAuth = false;
+    // todo emit a signal here?
+}
+
+void ExchangeBitfinex::onConnected()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) return;
+    _isConnected = true;
+    connect(&_ws, &QWebSocket::textMessageReceived,
+                this, &ExchangeBitfinex::onTextMessageReceived);
+    _checkConnectionTimer.stop();
+    // we wait for info event
+
+}
+
+void ExchangeBitfinex::onDisconnected()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) {
+        _isConnected = false;
+        disconnect(&_ws, &QWebSocket::textMessageReceived,
+                   this, &ExchangeBitfinex::onTextMessageReceived);
+    }
+    _checkConnectionTimer.start(1000); // todo check reconnect behaviour
 }
 
 void ExchangeBitfinex::setAuthData(const QString &api, const QString &skey)
@@ -181,29 +219,6 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
     qDebug() << __PRETTY_FUNCTION__ << subMsg;
     _ws.sendTextMessage(subMsg);
     return true;
-}
-
-void ExchangeBitfinex::onConnected()
-{
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
-    if (_isConnected) return;
-    _isConnected = true;
-    connect(&_ws, &QWebSocket::textMessageReceived,
-                this, &ExchangeBitfinex::onTextMessageReceived);
-
-    // we wait for info event
-
-}
-
-void ExchangeBitfinex::onDisconnected()
-{
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
-    if (_isConnected) {
-        _isConnected = false;
-        disconnect(&_ws, &QWebSocket::textMessageReceived,
-                   this, &ExchangeBitfinex::onTextMessageReceived);
-    }
-    _checkConnectionTimer.start(1000); // todo check reconnect behaviour
 }
 
 void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
@@ -314,6 +329,8 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
     (void) /* todo err hdlg */ subscribeChannel("book", "tBTCUSD", options);
     (void) subscribeChannel("book", "tBTGUSD", options);
     (void) subscribeChannel("book", "tXRPUSD", options);
+
+    emit exchangeStatus(name(), false, false);
 }
 
 void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
@@ -322,16 +339,18 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
     subscriberMsg(QJsonDocument(obj).toJson());
     assert(obj["event"]=="info");
 
-    // need to send auth
-    if (_apiKey.length()) {
+    // need to send auth on version info only
+    if (!_isAuth && obj.contains("version")) { // _apiKey.length()) {
         if (!sendAuth(_apiKey, _sKey))
             qWarning() << __FUNCTION__ << "failed to send Auth!";
         else {
-            // remove from RAM:
-            _apiKey.fill(QChar('x'), _apiKey.length());
-            _apiKey.clear();
-            _sKey.fill(QChar('x'), _sKey.length());
-            _sKey.clear();
+            // we need to keep in ram for reconnect/reauth remove from RAM
+            if (0) {
+                _apiKey.fill(QChar('x'), _apiKey.length());
+                _apiKey.clear();
+                _sKey.fill(QChar('x'), _sKey.length());
+                _sKey.clear();
+            }
         }
     }
 
@@ -346,14 +365,14 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
         switch (code) {
         case 20051: // stop restart websocket server (please reconnect)
             emit exchangeStatus(name(), false, true);
-            // todo we do need to reconnect and emit new status
+            reconnect();
             break;
         case 20060: // enter maintenance mode.
             emit exchangeStatus(name(), true, false);
             break;
         case 20061: // maintenance ended. Should unsub/sub all channels again
-            // todo unsub/sub all channels again
-            emit exchangeStatus(name(), false, false);
+            // done after reauth. emit exchangeStatus(name(), false, false);
+            reconnect(); // reconnect wouldn't be needed but this unsub/subs autom.
             break;
         default:
             qDebug() << __PRETTY_FUNCTION__ << "unknown code" << code;
@@ -372,6 +391,22 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
         QString symbol = obj["symbol"].toString();
         QString pair = obj["pair"].toString();
         if (channelId > 0 && channel.length() && symbol.length()) {
+            // first we check whether this channel exists already but with a different id (reconnect case)
+            for (auto &schan : _subscribedChannels) {
+                auto &ch = schan.second;
+                if (ch->channel() == channel &&
+                        ch->symbol() == symbol) {
+                    int idOld = ch->id();
+                    qDebug() << __PRETTY_FUNCTION__ << "found old channel" << idOld << "reusing as " << channelId;
+                    if (idOld != channelId) {
+                        ch->setId(channelId);
+                        _subscribedChannels.insert(std::make_pair(channelId, ch));
+                        _subscribedChannels.erase(idOld);
+                    }
+                    return;
+                }
+            }
+
             // check whether this channel exists already:
             auto it = _subscribedChannels.find(channelId);
             if (it!= _subscribedChannels.end()) {

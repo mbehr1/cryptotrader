@@ -18,8 +18,11 @@ public:
     virtual bool handleDataFromBitFlyer(const QJsonObject &data);
     virtual QString getStatusMsg() const { return QString("Channel %1 (%2 %3):").arg(_channel).arg(_isSubscribed ? "s" : "u").arg(_isTimeout ? "TO" : "OK"); }
 
+    const QString &channel() const { return _channel; }
     const QString &pair() const { return _pair; }
     const QString &symbol() const { return _symbol; }
+    int id() const { return _id; }
+    void setId(int id) { _id = id; }
 signals:
     void dataUpdated();
     void timeout(int id, bool isTimeout);
