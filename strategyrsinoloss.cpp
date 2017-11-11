@@ -144,7 +144,7 @@ QString StrategyRSINoLoss::getStatusMsg() const
 {
     QString msg;
     msg.append(QString("RSINoLoss%1 on %2:\n").arg(_id).arg(_exchange));
-    msg.append(QString(" amount bought: %1\n").arg(_persFundAmount));
+    msg.append(QString(" amount bought: %1 %2\n").arg(_persFundAmount).arg(_tradePair));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
     if (_paused)
         msg.append(QString(" paused! "));

@@ -145,6 +145,17 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
         // we can setup the strategies here as well:
         if (channel->_symbol == "tBTGUSD")
         {
+            std::shared_ptr<StrategyRSINoLoss> strategy = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#5"), channel->_symbol, 250.0, 13, 57, _providerCandlesMap[channel->_symbol], this);
+            if (_channelBookMap[channel->_symbol])
+                strategy->setChannelBook(_channelBookMap[channel->_symbol]);
+            connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+            _strategies.push_front(strategy);
+        }
+
+
+        if (channel->_symbol == "tBTGUSD")
+        {
             std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#4"), channel->_symbol, 50.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
             if (_channelBookMap[channel->_symbol])
                 strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
