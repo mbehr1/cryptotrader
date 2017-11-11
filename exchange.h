@@ -23,6 +23,7 @@ public:
     virtual QString getStatusMsg() const = 0;
 
 signals:
+    void exchangeStatus(QString, bool isMaintenance, bool isStopped);
     void channelDataUpdated(int channelId);
     void newChannelSubscribed(std::shared_ptr<Channel> channel);
     void orderCompleted(QString, int cid, double amount, double price, QString status);

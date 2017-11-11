@@ -23,6 +23,7 @@ public:
 signals:
 
 public slots:
+    void onExchangeStatus(QString exchange, bool isMaintenance, bool isStopped);
     void onNewChannelSubscribed(std::shared_ptr<Channel> channel);
     void onCandlesUpdated();
     void onTradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price);

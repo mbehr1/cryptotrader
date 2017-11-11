@@ -341,8 +341,25 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
     // code 20051: stop/restart websocket server (please reconnect)
     // code 20060: entering maintenance mode. please pause and resume after receiving info 20061
     // code 20061: maintenance ended. Should unsubscribe/subscribe all channels again
-
-
+    if (obj.contains("code")) {
+        int code = obj["code"].toInt();
+        switch (code) {
+        case 20051: // stop restart websocket server (please reconnect)
+            emit exchangeStatus(name(), false, true);
+            // todo we do need to reconnect and emit new status
+            break;
+        case 20060: // enter maintenance mode.
+            emit exchangeStatus(name(), true, false);
+            break;
+        case 20061: // maintenance ended. Should unsub/sub all channels again
+            // todo unsub/sub all channels again
+            emit exchangeStatus(name(), false, false);
+            break;
+        default:
+            qDebug() << __PRETTY_FUNCTION__ << "unknown code" << code;
+            break;
+        }
+    }
 
 }
 

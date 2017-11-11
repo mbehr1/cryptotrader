@@ -78,6 +78,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
     if(1){ // create Bitfinex exchange todo for test only disabled!
         auto exchange = std::make_shared<ExchangeBitfinex>(this);
         ExchangeBitfinex &_exchange = *(exchange.get());
+        connect(&_exchange, SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
+
         connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
         connect(&_exchange, SIGNAL(channelTimeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
 
@@ -97,6 +99,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
     if(0){ // create bitFlyer exchange
         auto exchange = std::make_shared<ExchangeBitFlyer>(this);
+
+        connect(&(*(exchange.get())), SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
 
         // todo configure
 
@@ -134,6 +138,17 @@ Engine::~Engine()
     QSettings set("mcbehr.de", "cryptotrader_engine");
     set.setValue("LastTelegramMsgId", _lastTelegramMsgId);
 
+}
+
+void Engine::onExchangeStatus(QString exchange, bool isMaintenance, bool isStopped)
+{
+    qDebug() << __PRETTY_FUNCTION__ << exchange << isMaintenance << isStopped;
+    // on maintenance or stopped halt all strategies that need that exchange
+    for (auto &strategy : _strategies) {
+        if (strategy->exchange() == exchange) {
+            strategy->setHalt(isMaintenance||isStopped);
+        }
+    }
 }
 
 void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)

@@ -13,6 +13,7 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id,
   , _generateMakerPrices(true)
   , _providerCandles(provider)
   , _paused(false)
+  , _halted(false)
   , _waitForFundsUpdate(false) // we could use this as initial trigger?
   , _valueBought(0.0)
   , _valueSold(0.0)
@@ -52,6 +53,7 @@ void StrategyRSINoLoss::setChannelBook(std::shared_ptr<ChannelBooks> book)
 
 void StrategyRSINoLoss::onCandlesUpdated()
 {
+    if (_halted) return;
     if (_paused) return;
     double rsi = _providerCandles->getRSI14();
     _lastRSI = rsi;
@@ -146,6 +148,8 @@ QString StrategyRSINoLoss::getStatusMsg() const
     msg.append(QString("RSINoLoss%1 on %2:\n").arg(_id).arg(_exchange));
     msg.append(QString(" amount bought: %1 %2\n").arg(_persFundAmount).arg(_tradePair));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
+    if (_halted)
+        msg.append(QString(" halted! "));
     if (_paused)
         msg.append(QString(" paused! "));
     if (_waitForFundsUpdate) {

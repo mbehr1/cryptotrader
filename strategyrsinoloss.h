@@ -17,9 +17,11 @@ public:
     virtual ~StrategyRSINoLoss();
     void setChannelBook(std::shared_ptr<ChannelBooks> book);
     QString getStatusMsg() const;
+    const QString &exchange() const { return _exchange; }
     const QString &id() const { return _id; }
     const QString &tradePair() const { return _tradePair; }
     QString onNewBotMessage(const QString &msg);
+    void setHalt(bool halt) { _halted = halt; }
 signals:
     void tradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
 public slots:
@@ -32,7 +34,8 @@ protected:
     bool _generateMakerPrices;
     std::shared_ptr<ProviderCandles> _providerCandles;
     std::shared_ptr<ChannelBooks> _channelBook;
-    bool _paused;
+    bool _paused; // persistent, manually set
+    bool _halted; // autom. e.g. during maintenance break
     bool _waitForFundsUpdate;
 
     double _valueBought;
