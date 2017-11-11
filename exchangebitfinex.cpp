@@ -312,7 +312,7 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 
     (void) /* todo err hdlg */ subscribeChannel("book", "tBTCUSD", options);
     (void) subscribeChannel("book", "tBTGUSD", options);
-
+    (void) subscribeChannel("book", "tXRPUSD", options);
 }
 
 void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
