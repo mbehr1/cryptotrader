@@ -135,7 +135,8 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
         oldValue = 0.0;
     }
     oldValue += (amount * price);
-    _persPrice = (_persFundAmount >= 0.0000001) ? (oldValue / _persFundAmount) : 0.0;
+    if (amount > 0.0) // we do only update the price on buy.
+        _persPrice = (_persFundAmount >= 0.0000001) ? (oldValue / _persFundAmount) : 0.0;
     _settings.setValue("FundAmount", _persFundAmount);
     _settings.setValue("Price", _persPrice);
     _settings.sync();
