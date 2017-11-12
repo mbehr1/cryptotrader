@@ -130,8 +130,10 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
     qDebug() << _id << "old data:" << _persFundAmount << _persPrice;
     double oldValue = _persFundAmount * _persPrice;
     _persFundAmount += amount;
-    if (_persFundAmount < 0.0000001)
+    if (_persFundAmount < 0.0000001) {
         _persFundAmount = 0.0;
+        oldValue = 0.0;
+    }
     oldValue += (amount * price);
     _persPrice = (_persFundAmount >= 0.0000001) ? (oldValue / _persFundAmount) : 0.0;
     _settings.setValue("FundAmount", _persFundAmount);
