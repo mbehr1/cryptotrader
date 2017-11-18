@@ -385,8 +385,8 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
                 }
             }
         }
-        const QString botMsg = QString("order completed %5 (cid %3): %1 *%6* at %2 (%4)")
-                .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id).arg(entry._tradePair);
+        const QString botMsg = QString("order completed %5 (cid %3): %1 *%6* at %2 (%4) fee %7 %8")
+                .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id).arg(entry._tradePair).arg(fee).arg(feeCur);
 
         it = waitForFundsUpdateMap.erase(it);
         qDebug() << __PRETTY_FUNCTION__ << "waitForFundsUpdateMap.size=" << waitForFundsUpdateMap.size();
