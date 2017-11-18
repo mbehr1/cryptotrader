@@ -45,7 +45,7 @@ private Q_SLOTS:
     void onTextMessageReceived(const QString &message);
     void onSslErrors(const QList<QSslError> &errors);
     void connectWS();
-    void onOrderCompleted(int cid, double amount, double price, QString status);
+    void onOrderCompleted(int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void onChannelTimeout(int id, bool isTimeout);
 
 private:

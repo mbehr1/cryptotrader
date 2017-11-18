@@ -79,7 +79,7 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                     double price = a[17].toDouble();
                     QString status = a[13].toString();
                     qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status << data;
-                    emit orderCompleted(cid, amount, price, status);
+                    //emit orderCompleted(cid, amount, price, status); we do it once we know the fee
                 } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
             } else
                 if (action.compare("tu")==0) {
@@ -104,6 +104,8 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                 const OrderItem &order = oit->second;
                                 if (order._cid) {
                                     qDebug() << __FUNCTION__ << "oc with fee" << order._cid << order._amount << order._price << order._status << "fee=" << ti._fee << ti._feeCur;
+                                    emit orderCompleted(order._cid, order._amount, order._price, order._status, order._pair, ti._fee, ti._feeCur);
+                                    // we coul mark here the order as confirmed/signal emitted and send orderComplete for orders without any confirmation after some timeout
                                 }
                             } else {
                                 qWarning() << __PRETTY_FUNCTION__ << "didn't found order for trade" << data;

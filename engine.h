@@ -27,7 +27,7 @@ public slots:
     void onNewChannelSubscribed(std::shared_ptr<Channel> channel);
     void onCandlesUpdated();
     void onTradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price);
-    void onOrderCompleted(QString exchange, int cid, double amount, double price, QString status);
+    void onOrderCompleted(QString exchange, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void onWalletUpdate(QString type, QString cur, double value, double delta);
     void onNewMessage(uint64_t id, Telegram::Message msg);
     void onChannelTimeout(int channelId, bool isTimeout);

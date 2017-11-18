@@ -31,8 +31,8 @@ ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
     _persLastCid = _settings.value("LastCid", 1000).toInt();
     // no end group! keep it persistent _settings.endGroup();
 
-    connect(&_accountInfoChannel, SIGNAL(orderCompleted(int,double,double,QString)),
-            this, SLOT(onOrderCompleted(int,double,double,QString)));
+    connect(&_accountInfoChannel, SIGNAL(orderCompleted(int,double,double,QString, QString, double, QString)),
+            this, SLOT(onOrderCompleted(int,double,double,QString, QString, double, QString)));
     connect(&_accountInfoChannel, SIGNAL(timeout(int, bool)),
             this, SLOT(onChannelTimeout(int, bool)));
     connect(&_accountInfoChannel, SIGNAL(walletUpdate(QString,QString,double,double)),
@@ -239,10 +239,10 @@ void ExchangeBitfinex::onTextMessageReceived(const QString &message)
     parseJson(message);
 }
 
-void ExchangeBitfinex::onOrderCompleted(int cid, double amount, double price, QString status)
+void ExchangeBitfinex::onOrderCompleted(int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur)
 {
-    qDebug() << __PRETTY_FUNCTION__ << cid << amount << price << status;
-    emit orderCompleted(name(), cid, amount, price, status);
+    qDebug() << __PRETTY_FUNCTION__ << cid << amount << pair << price << status << fee << feeCur;
+    emit orderCompleted(name(), cid, amount, price, status, pair, fee, feeCur);
 }
 
 void ExchangeBitfinex::onSslErrors(const QList<QSslError> &errors)

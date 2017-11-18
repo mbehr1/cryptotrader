@@ -132,8 +132,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
         connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
         connect(&_exchange, SIGNAL(channelTimeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
 
-        connect(&_exchange, SIGNAL(orderCompleted(QString, int,double,double,QString)),
-                this, SLOT(onOrderCompleted(QString, int,double,double,QString)));
+        connect(&_exchange, SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
+                this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
         connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
                 this, SLOT(onNewChannelSubscribed(std::shared_ptr<Channel>)));
         connect(&_exchange, SIGNAL(walletUpdate(QString,QString,double,double)),
@@ -366,7 +366,7 @@ void Engine::onTradeAdvice(QString exchange, QString id, QString tradePair, bool
     }
 }
 
-void Engine::onOrderCompleted(QString exchange, int cid, double amount, double price, QString status)
+void Engine::onOrderCompleted(QString exchange, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur)
 {
     auto &waitForFundsUpdateMap = _waitForFundsUpdateMaps[exchange];
     qDebug() << __PRETTY_FUNCTION__ << exchange << cid << amount << price << status << waitForFundsUpdateMap.size();
@@ -379,7 +379,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
             if (strategy && strategy->id() == entry._id) {
                 if (!entry._done) {
                     entry._done = true;
-                    strategy->onFundsUpdated(amount, price);
+                    strategy->onFundsUpdated(amount, price, pair, fee, feeCur);
                 } else {
                     qWarning() << __PRETTY_FUNCTION__ << "sanity check failed! (tried to update twice)";
                 }

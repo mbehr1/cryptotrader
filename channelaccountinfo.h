@@ -76,7 +76,7 @@ protected:
     void processFundUpdate(const QJsonArray &data);
 
 signals:
-    void orderCompleted(int cid, double amount, double price, QString status);
+    void orderCompleted(int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void walletUpdate(QString type, QString cur, double value, double delta);
 public slots:
 };

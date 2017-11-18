@@ -124,9 +124,9 @@ void StrategyRSINoLoss::onCandlesUpdated()
     }
 }
 
-void StrategyRSINoLoss::onFundsUpdated(double amount, double price)
+void StrategyRSINoLoss::onFundsUpdated(double amount, double price, QString pair, double fee, QString feeCur)
 {
-    qDebug() << __PRETTY_FUNCTION__ << _id << amount << price;
+    qDebug() << __PRETTY_FUNCTION__ << _id << _tradePair << amount << price << pair << fee << feeCur;
     qDebug() << _id << "old data:" << _persFundAmount << _persPrice;
     double oldValue = _persFundAmount * _persPrice;
     _persFundAmount += amount;

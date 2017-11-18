@@ -26,7 +26,7 @@ signals:
     void tradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
 public slots:
     void onCandlesUpdated();
-    void onFundsUpdated(double amount, double price);
+    void onFundsUpdated(double amount, double price, QString pair, double fee, QString feeCur);
 protected:
     QString _exchange;
     QString _id;
