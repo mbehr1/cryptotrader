@@ -63,7 +63,18 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                 const QJsonValue &v3 = data.at(2);
                 if (v3.isArray()) {
                     const QJsonArray &a = v3.toArray();
+                    long long id = a[0].toDouble();
                     int cid = a[2].toInt();
+                    if (id) {
+                        auto it = _orders.find(id);
+                        if (it != _orders.end()) {
+                            // update
+                            it->second.operator=(data);
+                        } else {
+                            // new
+                            _orders.insert(std::make_pair(id, OrderItem(data)));
+                        }
+                    }
                     double amount = a[7].toDouble();
                     double price = a[17].toDouble();
                     QString status = a[13].toString();
@@ -82,8 +93,23 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             it->second.operator=(data);
                         } else {
                             // new
-                            _trades.insert(std::make_pair(id, TradeItem(data)));
+                            it= _trades.insert(std::make_pair(id, TradeItem(data))).first;
                         }
+                        // do we have a fee for cid?
+                        if (it->second._feeCur.length()) {
+                            const TradeItem &ti = it->second;
+                            // search for order id:
+                            auto oit = _orders.find(ti._orderId);
+                            if (oit != _orders.end()) {
+                                const OrderItem &order = oit->second;
+                                if (order._cid) {
+                                    qDebug() << __FUNCTION__ << "oc with fee" << order._cid << order._amount << order._price << order._status << "fee=" << ti._fee << ti._feeCur;
+                                }
+                            } else {
+                                qWarning() << __PRETTY_FUNCTION__ << "didn't found order for trade" << data;
+                            }
+                        }
+
                     } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
                 } else
                     if (action.compare("wu")==0) { // 0, "wu", ["funding", "BTC", 0.1, 0, null]
@@ -174,6 +200,26 @@ void ChannelAccountInfo::processFundUpdate(const QJsonArray &data)
         Funding f(data);
         _fundings.insert(std::make_pair(id, f));
     }
+}
+
+ChannelAccountInfo::OrderItem::OrderItem(const QJsonArray &data)
+{
+    operator =(data);
+}
+
+ChannelAccountInfo::OrderItem &ChannelAccountInfo::OrderItem::operator =(const QJsonArray &data)
+{ // QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
+    if (data.at(2).isArray()) {
+        const QJsonArray &a = data.at(2).toArray();
+        _id = a[0].toDouble();
+        _pair = a[3].toString();
+        _cid = a[2].toInt();
+        _amount = a[7].toDouble();
+        _price = a[17].toDouble();
+        _status = a[13].toString();
+    } else assert(false);
+    qDebug() << "OrderItem" << _id << _pair << _cid << _amount << _price << _status;
+    return *this;
 }
 
 ChannelAccountInfo::TradeItem::TradeItem(const QJsonArray &data)

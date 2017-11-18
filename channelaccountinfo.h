@@ -14,6 +14,21 @@ public:
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual QString getStatusMsg() const override;
 
+    class OrderItem
+    {
+    public:
+        OrderItem(const QJsonArray &data);
+        OrderItem &operator=(const QJsonArray &data);
+
+        long long _id;
+        QString _pair;
+        int _cid;
+        double _amount;
+        double _price;
+        QString _status;
+    };
+    typedef std::map<long long, OrderItem> OrderItemMap;
+
     class TradeItem
     {
     public:
@@ -53,6 +68,7 @@ public:
     typedef std::map<long long, Funding> FundingMap;
 
 protected:
+    OrderItemMap _orders; // mapped by id (not by cid)
     TradeItemMap _trades; // mapped by trade id
     std::map<QString, std::map<QString, double>> _wallet; // _wallet[type][cur]=amount
     FundingMap _fundings; // mapped by funding id
