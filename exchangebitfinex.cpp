@@ -234,9 +234,9 @@ void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
 void ExchangeBitfinex::onTextMessageReceived(const QString &message)
 {
     //qDebug() << __PRETTY_FUNCTION__ << message;
-    QString msgCopy = message;
-    msgCopy.append(' '); // modify to create real copy and not shallow todo only until we find real root cause for those duplicate msgs
-    parseJson(msgCopy);
+    //QString msgCopy = message;
+    //msgCopy.append(' '); // modify to create real copy and not shallow todo only until we find real root cause for those duplicate msgs
+    parseJson(message);
 }
 
 void ExchangeBitfinex::onOrderCompleted(int cid, double amount, double price, QString status)

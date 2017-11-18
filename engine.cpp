@@ -24,6 +24,30 @@ QString queryFromStdin(const QString &query)
     return retVal;
 }
 
+
+Engine::FundsUpdateMapEntry::FundsUpdateMapEntry(const QJsonObject &o) :
+    _id("invalid")
+{
+    if (o.contains("id"))
+        _id = o["id"].toString();
+
+    _tradePair = o["tradePair"].toString();
+    _amount = o["amount"].toDouble();
+    _price = o["price"].toDouble();
+    _done = o["done"].toBool();
+}
+
+Engine::FundsUpdateMapEntry::operator QJsonObject() const
+{
+    QJsonObject o;
+    o.insert("id", _id);
+    o.insert("tradePair", _tradePair);
+    o.insert("amount", _amount);
+    o.insert("price", _price);
+    o.insert("done", _done);
+    return o;
+}
+
 Engine::Engine(QObject *parent) : QObject(parent)
 {
     // read telegram token from settings
@@ -43,7 +67,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
     qDebug() << __PRETTY_FUNCTION__ << "subscribers" << subscribers << subscribers.count();
     for (auto subs : subscribers)
         if (subs.length())
-            _telegramSubscribers.insert(subs.toInt());
+            _telegramSubscribers.insert(subs);
 
     QString bitfinexKey = set.value("BitfinexApiKey", QString("")).toString();
     if (!bitfinexKey.length()) {
@@ -64,6 +88,30 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
     _lastTelegramMsgId = set.value("LastTelegramMsgId", 0).toUInt();
 
+    // read fundsupdatemaps
+    {
+        set.beginGroup("WaitForFundsUpdate");
+        QByteArray fuString = set.value("MapAsJson").toByteArray();
+        if (fuString.length()) {
+            QJsonDocument doc = QJsonDocument::fromJson(fuString);
+            if (doc.isArray()){
+                const QJsonArray &arr = doc.array();
+                for (const auto &elem : arr) {
+                    if (elem.isObject()) {
+                        const QJsonObject &o = elem.toObject();
+                        QString exchange = o["exchange"].toString();
+                        int cid = o["cid"].toInt();
+                        const QJsonObject &mapEntry = o["mapEntry"].toObject();
+                        if (exchange.length())
+                            _waitForFundsUpdateMaps[exchange][cid] = mapEntry;
+                    }
+                }
+            }
+        }
+        set.endGroup();
+        qDebug() << __PRETTY_FUNCTION__ << "loaded" << _waitForFundsUpdateMaps.size() << "funds update maps";
+    }
+
     // start telegram bot:
     _telegramBot = std::make_shared<Telegram::Bot>(telegramToken, true, 500, 1 );
     connect(&(*_telegramBot), &Telegram::Bot::message, this,
@@ -72,7 +120,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
     // say hello to all subscribers:
     for (auto &s : _telegramSubscribers) {
         qDebug() << __PRETTY_FUNCTION__ << "welcoming" << s;
-        _telegramBot->sendMessage(QVariant((int)s), QString("welcome back. cryptotrader just started."));
+        _telegramBot->sendMessage(s, QString("welcome back. cryptotrader just *started*."), true);
+        // _telegramBot->setChatTitle(s, "test title from bot"); // will succeed only for channels or groups (?) but not for private chats
     }
 
     if(1){ // create Bitfinex exchange todo for test only disabled!
@@ -123,20 +172,50 @@ Engine::Engine(QObject *parent) : QObject(parent)
         }
 
     }
+
+    connect(&_slowMsgTimer, &QTimer::timeout, this, &Engine::onSlowMsgTimer);
+    _slowMsgTimer.setSingleShot(false);
+    _slowMsgTimer.start(5000); // send "slow" messages every 5s
 }
 
 Engine::~Engine()
 {
+    // stop slow msg timer:
+    _slowMsgTimer.stop();
+    // empty last msgs:
+    onSlowMsgTimer();
+
     // say goodbye
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("goodbye! cryptotrader is stopping."));
+            _telegramBot->sendMessage(s, QString("goodbye! cryptotrader is *stopping*."), true);
         }
         _telegramBot = 0; // delete already here to prevent. destructor processes pending events (might not work as the shared_ptr might be used in other classes
     }
     // store last telegram id:
     QSettings set("mcbehr.de", "cryptotrader_engine");
-    set.setValue("LastTelegramMsgId", _lastTelegramMsgId);
+    set.setValue("LastTelegramMsgId", (double)_lastTelegramMsgId);
+    // write fundsupdatemaps
+    {
+        QJsonDocument doc;
+        QJsonArray arr;
+        set.beginGroup("WaitForFundsUpdate");
+        for (const auto &e1 : _waitForFundsUpdateMaps) {
+            QString exchange = e1.first;
+            for (const auto &e2 : e1.second) {
+                int cid = e2.first;
+                const FundsUpdateMapEntry &mapEntry = e2.second;
+                QJsonObject o;
+                o.insert("exchange", exchange);
+                o.insert("cid", cid);
+                o.insert("mapEntry", mapEntry.operator QJsonObject());
+                arr.append(o);
+            }
+        }
+        doc.setArray(arr);
+        set.setValue("MapAsJson", doc.toJson(QJsonDocument::Compact));
+        set.endGroup();
+    }
 
 }
 
@@ -228,28 +307,34 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
 
 void Engine::onCandlesUpdated()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _providerCandlesMap.size();
+    //qDebug() << __PRETTY_FUNCTION__ << _providerCandlesMap.size();
 }
 
 void Engine::onChannelTimeout(int channelId, bool isTimeout)
 {
     qWarning() << __PRETTY_FUNCTION__ << channelId;
-    if (_telegramBot) {
-        for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("warning! Channel %1 has %2!")
-                                      .arg(channelId).arg(isTimeout ? "timeout" : "recovered"));
-        }
-    }
+    if (_slowMsg.length()) _slowMsg.append("\n");
+    _slowMsg.append(QString("warning! Channel %1 has *%2*!")
+                    .arg(channelId).arg(isTimeout ? "timeout" : "recovered"));
 }
 
 void Engine::onWalletUpdate(QString type, QString cur, double value, double delta)
 {
+    if (_slowMsg.length()) _slowMsg.append("\n");
+    _slowMsg.append(QString("WU %1 *%2=%3* `(%4)`")
+                    .arg(type).arg(cur).arg(value).arg(delta));
+}
+
+void Engine::onSlowMsgTimer()
+{
+    //qDebug() << __PRETTY_FUNCTION__ << _slowMsg.length();
+    if (!_slowMsg.length()) return;
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("WU %1 %2=%3 (%4)")
-                                      .arg(type).arg(cur).arg(value).arg(delta));
+            _telegramBot->sendMessage(s, _slowMsg, true); // use markup here
         }
     }
+    _slowMsg.clear();
 }
 
 void Engine::onSubscriberMsg(QString msg)
@@ -261,7 +346,6 @@ void Engine::onSubscriberMsg(QString msg)
         }
     }
 }
-
 
 void Engine::onTradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price)
 {
@@ -276,8 +360,8 @@ void Engine::onTradeAdvice(QString exchange, QString id, QString tradePair, bool
 
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
-            _telegramBot->sendMessage(s, QString("new order %5 (cid %4) raised: %1 %2 %6 at %3")
-                                      .arg(sell ? "sell" : "buy").arg(amount).arg(price).arg(ret).arg(id).arg(tradePair));
+            _telegramBot->sendMessage(s, QString("new order %5 (cid %4) raised: *%1* %2 *%6* at *%3*")
+                                      .arg(sell ? "sell" : "buy").arg(amount).arg(price).arg(ret).arg(id).arg(tradePair), true);
         }
     }
 }
@@ -301,7 +385,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
                 }
             }
         }
-        const QString botMsg = QString("order completed %5 (cid %3): %1 %6 at %2 (%4)")
+        const QString botMsg = QString("order completed %5 (cid %3): %1 *%6* at %2 (%4)")
                 .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id).arg(entry._tradePair);
 
         it = waitForFundsUpdateMap.erase(it);
@@ -309,7 +393,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
-                _telegramBot->sendMessage(s, botMsg);
+                _telegramBot->sendMessage(s, botMsg, true);
             }
         }
 
@@ -318,61 +402,61 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
     }
 }
 
-void Engine::onNewMessage(Telegram::Message msg)
+void Engine::onNewMessage(uint64_t id, Telegram::Message msg)
 {
-    qDebug() << __FUNCTION__ << msg << msg.string;
-    if (msg.id <= _lastTelegramMsgId) {
+    qDebug() << __FUNCTION__ << id << msg << msg.string;
+    if (id <= _lastTelegramMsgId) {
         qWarning() << "old telegram msgs skipped! Expecting id >" << _lastTelegramMsgId;
         return;
     } else
-        _lastTelegramMsgId = msg.id;
+        _lastTelegramMsgId = id;
 
     if (_telegramBot && msg.type == Telegram::Message::TextType) {
         if (msg.string.compare("subscribe")==0) {
-            if (_telegramSubscribers.find(msg.from.id) == _telegramSubscribers.end())
+            if (_telegramSubscribers.find(msg) == _telegramSubscribers.end())
             {
-                _telegramSubscribers.insert(msg.from.id);
+                _telegramSubscribers.insert(msg);
                 // persist subscribers:
                 QSettings set("mcbehr.de", "cryptotrader_engine");
                 QStringList subscribers;
                 for (auto subs : _telegramSubscribers)
-                    subscribers << QString("%1").arg(subs);
+                    subscribers << subs.toString();
                 set.setValue("TelegramSubscribers", subscribers);
-                _telegramBot->sendMessage(msg.from.id, "subscribed. Welcome!");
+                _telegramBot->sendMessage(msg, "*subscribed*. Welcome!", true);
             } else {
-                _telegramBot->sendMessage(msg.from.id, "Already subscribed. I'll send you trade order info.");
+                _telegramBot->sendMessage(msg, "Already subscribed. I'll send you trade order info.");
             }
         } else if (msg.string.compare("unsubscribe")==0) {
-            auto it = _telegramSubscribers.find(msg.from.id);
+            auto it = _telegramSubscribers.find(msg);
             if (it == _telegramSubscribers.end())
             {
-                _telegramBot->sendMessage(msg.from.id, "You're not subscribed yet.");
+                _telegramBot->sendMessage(msg, "You're not subscribed yet.");
             } else {
                 _telegramSubscribers.erase(it);
                 // persist subscribers:
                 QSettings set("mcbehr.de", "cryptotrader_engine");
                 QStringList subscribers;
                 for (auto subs : _telegramSubscribers)
-                    subscribers << QString("%1").arg(subs);
+                    subscribers << subs.toString();
                 set.setValue("TelegramSubscribers", subscribers);
-                _telegramBot->sendMessage(msg.from.id, "unsubscribed. Good bye!");
+                _telegramBot->sendMessage(msg, "*unsubscribed*. Good bye!", true);
             }
         }
         else
         if (msg.string.compare("status")==0) {
             for (auto &exchange : _exchanges)
-                _telegramBot->sendMessage(msg.from.id, exchange.second->getStatusMsg(), false, false, msg.id);
+                _telegramBot->sendMessage(msg, exchange.second->getStatusMsg(), false, false, msg.id);
 
             for (auto &strategy : _strategies) {
                 if (strategy) {
                     QString status = strategy->getStatusMsg();
-                    _telegramBot->sendMessage(msg.from.id, status,false, false, msg.id);
+                    _telegramBot->sendMessage(msg, status,false, false, msg.id);
                 }
             }
         }
         else
         if (msg.string.compare("restart")==0) {
-            _telegramBot->sendMessage(msg.from.id, "restarting with SIGHUP",false, false, msg.id);
+            _telegramBot->sendMessage(msg, "*restarting* with SIGHUP",true, false, msg.id);
             raise(SIGHUP);
         }
         else
@@ -381,13 +465,13 @@ void Engine::onNewMessage(Telegram::Message msg)
             for (auto &strategy : _strategies) {
                 answer.append( strategy->onNewBotMessage(msg.string) );
             }
-            _telegramBot->sendMessage(msg.from.id, answer, false, false, msg.id);
+            _telegramBot->sendMessage(msg, answer, false, false, msg.id);
         }
         else
         if (msg.string.compare("reconnect")==0) {
             for (auto &exchange : _exchanges)
                 exchange.second->reconnect();
-            _telegramBot->sendMessage(msg.from.id, QString("reconnecting..."), false, false, msg.id);
+            _telegramBot->sendMessage(msg, QString("*reconnecting*..."), true, false, msg.id);
         }
         else
         if (msg.string.startsWith("#")) { // send to a single strategy
@@ -396,7 +480,7 @@ void Engine::onNewMessage(Telegram::Message msg)
                     QString command = msg.string;
                     command.remove(0, strategy->id().length()+1);
                     QString answer = strategy->onNewBotMessage(command);
-                    _telegramBot->sendMessage(msg.from.id, answer, false, false, msg.id);
+                    _telegramBot->sendMessage(msg, answer, false, false, msg.id);
                 }
             }
         }
