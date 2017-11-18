@@ -47,6 +47,7 @@ protected:
     QSettings _settings;
     double _persFundAmount; // how much do we hold
     double _persPrice; // what was the price we bought it
+    double _profit;
     const double _marginFactor = 1.006; // sell at >2*0.2% gain
     // todo add transactionFeeFactor !
     const double _rsiBuy; //  = 25;

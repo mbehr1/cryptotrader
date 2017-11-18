@@ -26,6 +26,16 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id,
 {
     _persFundAmount = _settings.value("FundAmount", (double)0.0).toDouble();
     _persPrice = _settings.value("Price", 0.0).toDouble();
+    if (_settings.contains("Profit"))
+        _profit = _settings.value("Profit", 0.0).toDouble();
+    else {
+        if (_persFundAmount>0.0) {
+            // calc initially:
+            _profit -= ((_persFundAmount*1.001)*_persPrice); // we assume 0.1% trading fee on buy
+        } else
+            _profit = 0.0;
+    }
+
     _paused = _settings.value("paused", false).toBool();
     _waitForFundsUpdate = _settings.value("waitForFundsUpdate", false).toBool();
     qDebug() << __PRETTY_FUNCTION__ << _id << _tradePair << "got" << _persFundAmount << "bought at " << _persPrice;
@@ -102,8 +112,8 @@ void StrategyRSINoLoss::onCandlesUpdated()
         // do we have enough margin yet?
         //qDebug() << _id << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
         if (avgBidPrice > (_persPrice * _marginFactor) && rsi > _rsiHold) {
-            // sell all except the expected trading fee: (0.1%)
-            double amountToSell = _persFundAmount * 0.999;
+            // sell all
+            double amountToSell = _persFundAmount; // we reduced the fee already on fundsUpdate * 0.999;
             _waitForFundsUpdate = true;
             _valueSold += amountToSell * avgBidPrice;
             _persFundAmount = amountToSell; // we loose this anyhow due to fees
@@ -127,8 +137,25 @@ void StrategyRSINoLoss::onCandlesUpdated()
 void StrategyRSINoLoss::onFundsUpdated(double amount, double price, QString pair, double fee, QString feeCur)
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _tradePair << amount << price << pair << fee << feeCur;
-    qDebug() << _id << "old data:" << _persFundAmount << _persPrice;
+    qDebug() << _id << "old data:" << _persFundAmount << _persPrice << _profit;
     double oldValue = _persFundAmount * _persPrice;
+
+    // update profit on buy
+    if (amount>0.0) {
+        _profit -= (amount * price);
+    } else {
+        // on sell we make profit (hopefully). amount is neg.
+        _profit -= (amount * price);
+        if (_tradePair.endsWith(feeCur))
+            _profit += fee; // fee is neg on sell
+        else
+            qWarning() << __PRETTY_FUNCTION__ << "fee for sell with wrong currency" << amount << pair << fee << feeCur;
+    }
+
+    // reduce amount by fee:
+    if (!_tradePair.endsWith(feeCur) && _tradePair.contains(feeCur)) // e.g. tBTCUSD BTC
+        amount += fee; // for a buy amount is pos and fee is neg.
+
     _persFundAmount += amount;
     if (_persFundAmount < 0.0000001) {
         _persFundAmount = 0.0;
@@ -139,8 +166,9 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price, QString pair
         _persPrice = (_persFundAmount >= 0.0000001) ? (oldValue / _persFundAmount) : 0.0;
     _settings.setValue("FundAmount", _persFundAmount);
     _settings.setValue("Price", _persPrice);
+    _settings.setValue("Profit", _profit);
     _settings.sync();
-    qDebug() << _id << "new data:" << _persFundAmount << _persPrice;
+    qDebug() << _id << "new data:" << _persFundAmount << _persPrice << _profit;
 
     _waitForFundsUpdate = false;
 }
@@ -148,7 +176,9 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price, QString pair
 QString StrategyRSINoLoss::getStatusMsg() const
 {
     QString msg;
+    double curValue = _persFundAmount * _lastPrice;
     msg.append(QString("RSINoLoss%1 on %2:\n").arg(_id).arg(_exchange));
+    msg.append(QString(" profit: %1 %2\n").arg(_profit).arg(_profit+curValue));
     msg.append(QString(" amount bought: %1 %2\n").arg(_persFundAmount).arg(_tradePair));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
     if (_halted)
