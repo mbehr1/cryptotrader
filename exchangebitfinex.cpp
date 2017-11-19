@@ -336,11 +336,16 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
 {
     qDebug() << __PRETTY_FUNCTION__ << obj;
-    subscriberMsg(QJsonDocument(obj).toJson());
     assert(obj["event"]=="info");
 
     // need to send auth on version info only
     if (!_isAuth && obj.contains("version")) { // _apiKey.length()) {
+
+        if (obj["version"].toInt() != 2) {
+            qWarning() << __PRETTY_FUNCTION__ << "tested with version 2 only. got" << obj;
+            subscriberMsg(QString("*unknown version!* (%1)").arg(QJsonDocument(obj).toJson().toStdString().c_str()));
+        }
+
         if (!sendAuth(_apiKey, _sKey))
             qWarning() << __FUNCTION__ << "failed to send Auth!";
         else {
@@ -375,6 +380,7 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
             reconnect(); // reconnect wouldn't be needed but this unsub/subs autom.
             break;
         default:
+            subscriberMsg(QString("*unknown code!* not handled. (%1)").arg(QJsonDocument(obj).toJson().toStdString().c_str()));
             qDebug() << __PRETTY_FUNCTION__ << "unknown code" << code;
             break;
         }
