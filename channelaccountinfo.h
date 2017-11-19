@@ -26,6 +26,10 @@ public:
         double _amount;
         double _price;
         QString _status;
+        double _fee;
+        QString _feeCur;
+        bool _complete;
+        bool _emittedComplete;
     };
     typedef std::map<long long, OrderItem> OrderItemMap;
 

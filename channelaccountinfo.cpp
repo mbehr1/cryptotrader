@@ -58,7 +58,7 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
         if (actionValue.isString()) {
             auto action = actionValue.toString();
             if (action.compare("hb")==0) {} else // _lastMsg already updated
-            if (action.compare("oc")==0) //order completed/cancel
+            if (action.compare("oc")==0 || action.compare("ou")==0 || action.compare("on")==0) //order completed/cancel or update or new
             { // QJsonArray([0,"oc",[3728702632,null,1001,"tBTCUSD",1504893124088,1504893124124,0,0.116163,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 4304.2632(0.12)",null,null,4304.3,4304.26318325,0,0,null,null,null,0,0,0]])
                 const QJsonValue &v3 = data.at(2);
                 if (v3.isArray()) {
@@ -72,14 +72,16 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             it->second.operator=(data);
                         } else {
                             // new
-                            _orders.insert(std::make_pair(id, OrderItem(data)));
+                            it = _orders.insert(std::make_pair(id, OrderItem(data))).first;
                         }
+                        if (action.compare("oc")==0)
+                            it->second._complete = true;
                     }
                     double amount = a[7].toDouble();
                     double price = a[17].toDouble();
                     QString status = a[13].toString();
-                    qDebug() << __FUNCTION__ << "oc" << cid << amount << price << status << data;
-                    //emit orderCompleted(cid, amount, price, status); we do it once we know the fee
+                    qDebug() << __FUNCTION__ << action << cid << amount << price << status << data;
+                    //emit orderCompleted(cid, amount, price, status); we do it once we know the fee todo trigger timer to check for completed but not emitted ones
                 } else qWarning() << __PRETTY_FUNCTION__ << "no array" << data;
             } else
                 if (action.compare("tu")==0) {
@@ -101,11 +103,18 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             // search for order id:
                             auto oit = _orders.find(ti._orderId);
                             if (oit != _orders.end()) {
-                                const OrderItem &order = oit->second;
+                                OrderItem &order = oit->second;
                                 if (order._cid) {
-                                    qDebug() << __FUNCTION__ << "oc with fee" << order._cid << order._amount << order._price << order._status << "fee=" << ti._fee << ti._feeCur;
-                                    emit orderCompleted(order._cid, order._amount, order._price, order._status, order._pair, ti._fee, ti._feeCur);
-                                    // we coul mark here the order as confirmed/signal emitted and send orderComplete for orders without any confirmation after some timeout
+                                    // update fee for order. We might get multiple trades for one order for partially executed ones
+                                    order._fee += ti._fee;
+                                    if (!order._feeCur.length())
+                                        order._feeCur = ti._feeCur;
+                                    else if (order._feeCur != ti._feeCur) qWarning() << __PRETTY_FUNCTION__ << "different feeCur for " << data;
+                                    if  (order._complete) {
+                                        qDebug() << __FUNCTION__ << "oc with fee" << order._cid << order._amount << order._price << order._status << "fee=" << order._fee << order._feeCur;
+                                        order._emittedComplete = true;
+                                        emit orderCompleted(order._cid, order._amount, order._price, order._status, order._pair, order._fee, order._feeCur);
+                                    }
                                 }
                             } else {
                                 qWarning() << __PRETTY_FUNCTION__ << "didn't found order for trade" << data;
@@ -204,7 +213,8 @@ void ChannelAccountInfo::processFundUpdate(const QJsonArray &data)
     }
 }
 
-ChannelAccountInfo::OrderItem::OrderItem(const QJsonArray &data)
+ChannelAccountInfo::OrderItem::OrderItem(const QJsonArray &data) :
+    _price(0.0), _fee(0.0), _complete(false), _emittedComplete(false)
 {
     operator =(data);
 }
@@ -217,10 +227,12 @@ ChannelAccountInfo::OrderItem &ChannelAccountInfo::OrderItem::operator =(const Q
         _pair = a[3].toString();
         _cid = a[2].toInt();
         _amount = a[7].toDouble();
-        _price = a[17].toDouble();
-        _status = a[13].toString();
+        if (a.count()>=17)
+            _price = a[17].toDouble();
+        if (a.count()>=13)
+            _status = a[13].toString();
     } else assert(false);
-    qDebug() << "OrderItem" << _id << _pair << _cid << _amount << _price << _status;
+    qDebug() << "OrderItem" << data.at(1) << _id << _pair << _cid << _amount << _price << _status;
     return *this;
 }
 
