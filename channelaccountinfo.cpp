@@ -7,12 +7,43 @@
 ChannelAccountInfo::ChannelAccountInfo() :
     Channel(0, "Account Info", "", "")
 {
-
+    _checkPendingTimer.setSingleShot(true);
+    connect(&_checkPendingTimer, SIGNAL(timeout()), this, SLOT(onCheckPending()));
 }
 
 ChannelAccountInfo::~ChannelAccountInfo()
 {
+    // stop timer but trigger it once
+    _checkPendingTimer.stop();
+    onCheckPending();
 
+}
+
+void ChannelAccountInfo::onCheckPending()
+{
+    qDebug() << __PRETTY_FUNCTION__;
+    // check whether he have complete orders that don't have a emitted signal:
+    for (auto &oit : _orders) {
+        OrderItem &order = oit.second;
+        if (order._complete && !order._emittedComplete) {
+            qDebug() << __FUNCTION__ << "oc without known fee" << order._cid << order._amount << order._price << order._status << "fee=" << order._fee << order._feeCur;
+            // estimate fee:
+            if (!order._feeCur.length()) {
+                // amount > 0 (buy) -> fee in first cur
+                if (order._amount>0.0) {
+                    order._feeCur = order._pair.mid(1, 3);
+                    order._fee = -order._amount * 0.002;
+                } else {
+                    // sell
+                    order._feeCur = order._pair.mid(4, 3);
+                    order._fee = order._amount * order._price * 0.002;
+                }
+                qDebug() << __PRETTY_FUNCTION__ << "guess fee to " << order._fee << order._feeCur;
+            }
+            order._emittedComplete = true;
+            emit orderCompleted(order._cid, order._amount, order._price, order._status, order._pair, order._fee, order._feeCur);
+        }
+    }
 }
 
 QString ChannelAccountInfo::getStatusMsg() const
@@ -74,8 +105,10 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                             // new
                             it = _orders.insert(std::make_pair(id, OrderItem(data))).first;
                         }
-                        if (action.compare("oc")==0)
+                        if (action.compare("oc")==0) {
                             it->second._complete = true;
+                            _checkPendingTimer.start(10000); // check 10s after last oc
+                        }
                     }
                     double amount = a[7].toDouble();
                     double price = a[17].toDouble();

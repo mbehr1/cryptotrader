@@ -3,6 +3,7 @@
 
 #include <map>
 #include <QObject>
+#include <QTimer>
 #include "channel.h"
 
 class ChannelAccountInfo : public Channel
@@ -76,6 +77,7 @@ protected:
     TradeItemMap _trades; // mapped by trade id
     std::map<QString, std::map<QString, double>> _wallet; // _wallet[type][cur]=amount
     FundingMap _fundings; // mapped by funding id
+    QTimer _checkPendingTimer;
 
     void processFundUpdate(const QJsonArray &data);
 
@@ -83,6 +85,7 @@ signals:
     void orderCompleted(int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void walletUpdate(QString type, QString cur, double value, double delta);
 public slots:
+    void onCheckPending();
 };
 
 #endif // CHANNELACCOUNTINFO_H
