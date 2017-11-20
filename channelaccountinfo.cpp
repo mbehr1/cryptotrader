@@ -145,8 +145,12 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                     else if (order._feeCur != ti._feeCur) qWarning() << __PRETTY_FUNCTION__ << "different feeCur for " << data;
                                     if  (order._complete) {
                                         qDebug() << __FUNCTION__ << "oc with fee" << order._cid << order._amount << order._price << order._status << "fee=" << order._fee << order._feeCur;
-                                        order._emittedComplete = true;
-                                        emit orderCompleted(order._cid, order._amount, order._price, order._status, order._pair, order._fee, order._feeCur);
+                                        if (!order._emittedComplete) {
+                                            order._emittedComplete = true;
+                                            emit orderCompleted(order._cid, order._amount, order._price, order._status, order._pair, order._fee, order._feeCur);
+                                        } else {
+                                            qWarning() << __PRETTY_FUNCTION__ << "oc with fee but already emitted!" << order._cid;
+                                        }
                                     }
                                 }
                             } else {
