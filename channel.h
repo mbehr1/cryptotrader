@@ -30,7 +30,7 @@ public slots:
 
 protected:
     void timerEvent(QTimerEvent *event) override;
-    const qint64 MAX_MS_SINCE_LAST = 10000; // 10s
+    const qint64 MAX_MS_SINCE_LAST = 15000; // 15s
     friend class ExchangeBitfinex;
     friend class Engine;
     bool _isSubscribed;
