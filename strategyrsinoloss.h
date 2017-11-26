@@ -13,7 +13,7 @@ class StrategyRSINoLoss : public QObject
 public:
     explicit StrategyRSINoLoss(const QString &exchange, const QString &id, const QString &tradePair, const double &buyValue,
                                const double &rsiBuy, const double &rsiHold,
-                               std::shared_ptr<ProviderCandles> provider, QObject *parent = 0);
+                               std::shared_ptr<ProviderCandles> provider, QObject *parent = 0, bool generateMakerPrices=true, double marginFactor=1.006, bool useBookPrices=false);
     virtual ~StrategyRSINoLoss();
     void setChannelBook(std::shared_ptr<ChannelBooks> book);
     QString getStatusMsg() const;
@@ -32,6 +32,7 @@ protected:
     QString _id;
     QString _tradePair; // e.g. tBTCUSD
     bool _generateMakerPrices;
+    bool _useBookPrices;
     std::shared_ptr<ProviderCandles> _providerCandles;
     std::shared_ptr<ChannelBooks> _channelBook;
     bool _paused; // persistent, manually set
@@ -48,12 +49,12 @@ protected:
     double _persFundAmount; // how much do we hold
     double _persPrice; // what was the price we bought it
     double _profit;
-    const double _marginFactor = 1.006; // sell at >2*0.2% gain
+    const double _marginFactor; // = 1.006; // sell at >2*0.2% gain
     // todo add transactionFeeFactor !
     const double _rsiBuy; //  = 25;
     const double _rsiHold; // = 59; // don't sell even if margin is met but rsi below that value
     const double _buyValue; //  = 1300; // value not shares/amount todo
-    const double _minFundToSell = 0.01; // todo
+    const double _minFundToSell = 0.0005; // todo
 };
 
 #endif // STRATEGYRSINOLOSS_H

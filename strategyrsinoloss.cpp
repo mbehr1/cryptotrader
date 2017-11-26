@@ -6,11 +6,13 @@
 #include "providercandles.h"
 
 StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id, const QString &tradePair, const double &buyValue,
-                                     const double &rsiBuy, const double &rsiHold, std::shared_ptr<ProviderCandles> provider, QObject *parent) : QObject(parent)
+                                     const double &rsiBuy, const double &rsiHold, std::shared_ptr<ProviderCandles> provider, QObject *parent,
+                                     bool generateMakerPrices, double marginFactor, bool useBookPrices) : QObject(parent)
   , _exchange(exchange)
   , _id(id)
   , _tradePair(tradePair)
-  , _generateMakerPrices(true)
+  , _generateMakerPrices(generateMakerPrices)
+  , _useBookPrices(useBookPrices)
   , _providerCandles(provider)
   , _paused(false)
   , _halted(false)
@@ -20,6 +22,7 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id,
   , _lastRSI(-1.0)
   , _lastPrice(0.0)
   , _settings("mcbehr.de", QString("cryptotrader_strategyrsinoloss%1").arg(_id))
+  , _marginFactor(marginFactor)
   , _rsiBuy(rsiBuy)
   , _rsiHold(rsiHold)
   , _buyValue(buyValue)
@@ -79,7 +82,7 @@ void StrategyRSINoLoss::onCandlesUpdated()
 
     double buyAmount = _buyValue / curPrice; // roughly
 
-    if (_channelBook && !_generateMakerPrices) {
+    if (_channelBook && !_generateMakerPrices && _useBookPrices) {
         gotAvgAskPrice = _channelBook->getPrices(true, buyAmount - _persFundAmount, avgAskPrice, maxAskPrice);
         gotAvgBidPrice = _channelBook->getPrices(false, _persFundAmount, avgBidPrice, minBidPrice);
         // this usually does not generate a maker fee (0.1% trade fee instead of 0.2%)

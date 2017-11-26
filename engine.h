@@ -30,7 +30,7 @@ public slots:
     void onOrderCompleted(QString exchange, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void onWalletUpdate(QString type, QString cur, double value, double delta);
     void onNewMessage(uint64_t id, Telegram::Message msg);
-    void onChannelTimeout(int channelId, bool isTimeout);
+    void onChannelTimeout(QString exchange, int channelId, bool isTimeout);
     void onSubscriberMsg(QString msg);
     void onSlowMsgTimer();
 protected:

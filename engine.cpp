@@ -130,7 +130,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
         connect(&_exchange, SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
 
         connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
-        connect(&_exchange, SIGNAL(channelTimeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
+        connect(&_exchange, SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool)));
 
         connect(&_exchange, SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
                 this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
@@ -146,12 +146,34 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
     }
 
-    if(0){ // create bitFlyer exchange
-        auto exchange = std::make_shared<ExchangeBitFlyer>(this);
+    if(1){ // create bitFlyer exchange
+        QString key = set.value("BitFlyerApiKey", QString("")).toString();
+        if (!key.length()) {
+            key = queryFromStdin("bitFlyer api key");
+            if (!key.length())
+                throw std::invalid_argument("bitFlyer api key missing");
+            set.setValue("BitFlyerApiKey", key);
+            set.sync();
+        }
+        QString SKey = set.value("BitFlyerApiSKey", QString("")).toString();
+        if (!SKey.length()) {
+            SKey = queryFromStdin("bitFlyer api secret");
+            if (!SKey.length())
+                throw std::invalid_argument("bitFlyer api secret missing");
+            set.setValue("BitFlyerApiSKey", SKey);
+            set.sync();
+        }
+
+        auto exchange = std::make_shared<ExchangeBitFlyer>(key, SKey, this);
 
         connect(&(*(exchange.get())), SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
+        connect(&(*(exchange.get())), SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
+        connect(&(*(exchange.get())), SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool)));
 
-        // todo configure
+        connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
+                this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
+        connect(&(*(exchange.get())), SIGNAL(walletUpdate(QString,QString,double,double)),
+                this, SLOT(onWalletUpdate(QString,QString,double,double)), Qt::QueuedConnection);
 
         assert(_exchanges.find(exchange->name()) == _exchanges.end());
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
@@ -164,7 +186,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
         // and we can configure the strategy here as well:
         {
             std::shared_ptr<StrategyRSINoLoss> strategy5 =
-                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 10000.0, 17, 59, _providerCandlesMap["FX_BTC_JPY"], this);
+                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 15000.0, 31, 59, _providerCandlesMap["FX_BTC_JPY"], this, false, 1.002);
             strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel(ExchangeBitFlyer::Book)));
             connect(&(*strategy5), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
@@ -184,6 +206,12 @@ Engine::~Engine()
     _slowMsgTimer.stop();
     // empty last msgs:
     onSlowMsgTimer();
+
+    // stop exchanges here:
+    for (auto &exchange : _exchanges) {
+        exchange.second = 0;
+    }
+
 
     // say goodbye
     if (_telegramBot) {
@@ -310,12 +338,12 @@ void Engine::onCandlesUpdated()
     //qDebug() << __PRETTY_FUNCTION__ << _providerCandlesMap.size();
 }
 
-void Engine::onChannelTimeout(int channelId, bool isTimeout)
+void Engine::onChannelTimeout(QString exchange, int channelId, bool isTimeout)
 {
-    qWarning() << __PRETTY_FUNCTION__ << channelId;
+    qWarning() << __PRETTY_FUNCTION__ << exchange << channelId;
     if (_slowMsg.length()) _slowMsg.append("\n");
-    _slowMsg.append(QString("warning! Channel %1 has *%2*!")
-                    .arg(channelId).arg(isTimeout ? "timeout" : "recovered"));
+    _slowMsg.append(QString("warning! Channel %3 %1 has *%2*!")
+                    .arg(channelId).arg(isTimeout ? "timeout" : "recovered").arg(exchange));
 }
 
 void Engine::onWalletUpdate(QString type, QString cur, double value, double delta)

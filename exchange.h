@@ -3,13 +3,15 @@
 
 #include <memory>
 #include <QObject>
+#include <QSettings>
+
 #include "channel.h"
 
 class Exchange : public QObject
 {
     Q_OBJECT
 public:
-    explicit Exchange(QObject *parent = 0);
+    explicit Exchange(QObject *parent, const QString &exchange_name);
     virtual ~Exchange();
 
     virtual const QString &name() const = 0;
@@ -22,20 +24,30 @@ public:
 
     virtual QString getStatusMsg() const = 0;
     virtual void reconnect() = 0;
+    virtual void setAuthData(const QString &api, const QString &skey);
 signals:
     void exchangeStatus(QString, bool isMaintenance, bool isStopped);
     void channelDataUpdated(int channelId);
     void newChannelSubscribed(std::shared_ptr<Channel> channel);
     void orderCompleted(QString, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void walletUpdate(QString type, QString cur, double value, double delta);
-    void channelTimeout(int channelId, bool isTimeout);
+    void channelTimeout(QString, int channelId, bool isTimeout);
     void subscriberMsg(QString msg);
 
 public slots:
 
 protected:
+    int getNextCid(); // persistent per exchange
+
+    QString _apiKey;
+    QString _sKey;
+
     bool _isConnected;
     bool _isAuth;
+
+    // persistent settings
+    QSettings _settings;
+    int _persLastCid;
 };
 
 #endif // EXCHANGE_H

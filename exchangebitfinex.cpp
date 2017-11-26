@@ -9,11 +9,10 @@
 #include <QJsonDocument>
 #include <QMessageAuthenticationCode>
 #include "exchangebitfinex.h"
-#include <QSettings>
 
 ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
-    Exchange(parent), _checkConnectionTimer(this),
-    _settings("mcbehr.de", "cryptotrader_exchangebitfinex")
+    Exchange(parent, "cryptotrader_exchangebitfinex")
+  , _checkConnectionTimer(this)
 {
 
     // parse json test
@@ -26,10 +25,12 @@ ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
         parseJson(msg);
     }
 
-    // load settings:
-    _settings.beginGroup("ExchangeBitfinex");
-    _persLastCid = _settings.value("LastCid", 1000).toInt();
-    // no end group! keep it persistent _settings.endGroup();
+    // load settings from older versions if current is still 0
+    if (!_persLastCid) {
+        _settings.beginGroup("ExchangeBitfinex");
+        _persLastCid = _settings.value("LastCid", 1000).toInt();
+        _settings.endGroup();
+    }
 
     connect(&_accountInfoChannel, SIGNAL(orderCompleted(int,double,double,QString, QString, double, QString)),
             this, SLOT(onOrderCompleted(int,double,double,QString, QString, double, QString)));
@@ -65,15 +66,6 @@ QString ExchangeBitfinex::getStatusMsg() const
 
     toRet.append(QString("\n %1").arg(_accountInfoChannel.getStatusMsg()));
     return toRet;
-}
-
-int ExchangeBitfinex::getNextCid()
-{
-    ++_persLastCid;
-    if (_persLastCid <= 0) _persLastCid = 1000; // start/wrap at 1000
-    _settings.setValue("LastCid", _persLastCid);
-    _settings.sync();
-    return _persLastCid;
 }
 
 void ExchangeBitfinex::connectWS()
@@ -120,12 +112,9 @@ void ExchangeBitfinex::onDisconnected()
 
 void ExchangeBitfinex::setAuthData(const QString &api, const QString &skey)
 {
+    Exchange::setAuthData(api, skey);
     if (_isConnected)
         (void)sendAuth(api, skey);
-    else {
-        _apiKey = api;
-        _sKey = skey;
-    }
 }
 
 bool ExchangeBitfinex::sendAuth(const QString &apiKey,
@@ -226,7 +215,7 @@ void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
     qWarning() << __PRETTY_FUNCTION__ << id;
     // todo handle this here? resubscribe? check connection? disconnect/reconnect?
     // forward
-    emit channelTimeout(id, isTimeout);
+    emit channelTimeout(name(), id, isTimeout);
     if (id == 0 && !_isAuth)
         _accountInfoChannel._isSubscribed = !isTimeout;
 }

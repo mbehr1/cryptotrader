@@ -24,7 +24,7 @@ public:
     ExchangeBitfinex(const ExchangeBitfinex &) = delete;
     virtual ~ExchangeBitfinex();
     const QString &name() const { return bitfinexName; }
-    void setAuthData(const QString &api, const QString &skey);
+    void setAuthData(const QString &api, const QString &skey) override;
     QString getStatusMsg() const override;
     bool subscribeChannel(const QString &channelName, const QString &symbol,
                           const std::map<QString, QString> &options=std::map<QString, QString>());
@@ -56,17 +56,11 @@ private:
     void handleInfoEvent(const QJsonObject &obj);
     void handleSubscribedEvent(const QJsonObject &obj);
     void handleChannelData(const QJsonArray &data);
-    int getNextCid();
 
     QWebSocket _ws;
-    QString _apiKey;
-    QString _sKey;
     QTimer _checkConnectionTimer;
     ChannelAccountInfo _accountInfoChannel;
     std::map<int, std::shared_ptr<Channel>> _subscribedChannels;
-    // persistent settings
-    QSettings _settings;
-    int _persLastCid;
 };
 
 #endif // EXCHANGEBITFINEX_H

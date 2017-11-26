@@ -162,7 +162,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                     double price = o["price"].toDouble();
                     double size = o["size"].toDouble();
                     if (size>=0.0)
-                        handleSingleEntry(price, 1, size);
+                        handleSingleEntry(price, -1, -size);
                     else
                         qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
                 } else
@@ -182,7 +182,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                     double price = o["price"].toDouble();
                     double size = o["size"].toDouble();
                     if (size>=0.0)
-                        handleSingleEntry(price, 1, -size);
+                        handleSingleEntry(price, -1, size);
                     else
                         qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
                 } else
@@ -199,7 +199,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 }
 
 void ChannelBooks::handleSingleEntry(const double &price, const int &count, const double &amount)
-{
+{ // count == -1 -> set value abs and don't add rel.
     bool isFunding = _symbol.startsWith("f"); // todo cache this?
     // count = 0 -> delete
     // otherwise add/update
@@ -213,17 +213,24 @@ void ChannelBooks::handleSingleEntry(const double &price, const int &count, cons
             map.erase(it);
         else qWarning() << "couldn't find price to be deleted" << price << count << amount;
     } else {
-        if (count<=0) qWarning() << __PRETTY_FUNCTION__ << "count <=0!";
-        assert(count>0); // todo dangerous!
         if (it != map.end()) {
             // update
             BookItem &bookItem = it->second;
-            bookItem._count += count;
-            bookItem._amount += amount;
+            if (count == -1) {
+                bookItem._count = 1;
+                bookItem._amount = amount;
+            } else {
+                bookItem._count += count;
+                bookItem._amount += amount;
+            }
+            if (bookItem._amount == 0.0)
+                map.erase(it);
         } else {
             // add
-            BookItem bookItem(price, count, amount);
-            map.insert(std::make_pair(price,bookItem));
+            if (amount != 0.0) {
+                BookItem bookItem(price, count==-1 ? 1 : count, amount);
+                map.insert(std::make_pair(price,bookItem));
+            }
         }
     }
 }
@@ -263,13 +270,17 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
 void ChannelBooks::printAsksBids() const
 {
     qDebug() << "asks:";
+    int i = 0;
     for (const auto &item : _asks) {
         qDebug() << item.second._price << item.second._count << item.second._amount;
+        ++i;
+        if (i>10)break;
     }
+    /*
     qDebug() << "bids:";
     for (const auto &item : _bids) {
         qDebug() << item.second._price << item.second._count << item.second._amount;
-    }
+    }*/
 
 }
 
