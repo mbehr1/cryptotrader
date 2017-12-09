@@ -23,6 +23,7 @@ public:
     const QString &symbol() const { return _symbol; }
     int id() const { return _id; }
     void setId(int id) { _id = id; }
+    void setTimeoutIntervalMs(unsigned timeoutMs) { _timeoutMs = timeoutMs; }
 signals:
     void dataUpdated();
     void timeout(int id, bool isTimeout);
@@ -30,7 +31,7 @@ public slots:
 
 protected:
     void timerEvent(QTimerEvent *event) override;
-    const qint64 MAX_MS_SINCE_LAST = 15000; // 15s
+    qint64 _timeoutMs;
     friend class ExchangeBitfinex;
     friend class Engine;
     bool _isSubscribed;

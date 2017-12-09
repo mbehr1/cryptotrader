@@ -7,7 +7,7 @@
 #include "channel.h"
 
 Channel::Channel(int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed) :
-    _isSubscribed(subscribed), _isTimeout(false), _id(id), _channel(name), _symbol(symbol), _pair(pair)
+    _timeoutMs(15000), _isSubscribed(subscribed), _isTimeout(false), _id(id), _channel(name), _symbol(symbol), _pair(pair)
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _channel << _symbol << _pair << _isSubscribed;
     startTimer(1000); // each sec
@@ -20,7 +20,7 @@ void Channel::timerEvent(QTimerEvent *event)
     if (_isSubscribed) {
         qint64 now = QDateTime::currentMSecsSinceEpoch();
         qint64 last = _lastMsg.toMSecsSinceEpoch();
-        if (now-last > MAX_MS_SINCE_LAST) {
+        if (now-last > _timeoutMs) {
             if (!_isTimeout) {
                 _isTimeout = true;
                 qWarning() << "channel (" << _id << ") seems stuck!";
