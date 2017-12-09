@@ -135,7 +135,7 @@ bool ExchangeBitfinex::sendAuth(const QString &apiKey,
 
     struct timeval tv;
     gettimeofday(&tv, 0);
-    unsigned long long nonce = 0xf000000000000000 + (tv.tv_sec * 1000.0) + (tv.tv_usec *0.001) + 15;
+    unsigned long long nonce = 0xf100000000000000 + (tv.tv_sec * 1000.0) + (tv.tv_usec *0.001) + 15;
     // todo remove 0xf... with next api key change
 
     QString authNonce = QString("%1").arg(nonce);
