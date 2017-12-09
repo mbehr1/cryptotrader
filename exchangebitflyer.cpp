@@ -683,6 +683,7 @@ QString ExchangeBitFlyer::getStatusMsg() const
 {
     QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
             .arg(_isAuth ? "AU" : "not authenticated!").arg(name());
+    toRet.append(QString("\n Health=%1").arg(_health));
 
     // toRet.append(QString("\n %1").arg(_accountInfoChannel.getStatusMsg()));
     return toRet;
