@@ -201,9 +201,9 @@ void ExchangeBitFlyer::requestFinished(QNetworkReply *reply)
             auto &fn = (*it).second._resultFn;
             const QString &path = (*it).second._path;
 
-            _pendingReplies.erase(reply);
-            _pendingRequests.erase(path);
+            _pendingRequests.erase(path); // delete this first to allow callbacks to retrigger
             fn(reply);
+            _pendingReplies.erase(reply); // don't delete before as fn is being used!
         } else {
             qWarning() << __PRETTY_FUNCTION__ << "couldnt find reply in pendingReplies map!" << reply;
         }
