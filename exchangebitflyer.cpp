@@ -291,10 +291,14 @@ void ExchangeBitFlyer::triggerGetHealth()
                                     QString health = d.object()["status"].toString();
                                     if (health != _health) {
                                        // qDebug() << __PRETTY_FUNCTION__ << "got health=" << health; // NORMAL, BUSY, VERY BUSY, SUPER BUSY, STOP
+                                       bool wasMaintenance = health.compare("STOP")==0;
+                                       bool wasStopped = wasMaintenance;
+                                       bool first = _health.length() == 0;
                                        _health = health;
                                        bool isMaintenance = health.compare("STOP")==0;
                                        bool isStopped = isMaintenance;
-                                       emit exchangeStatus(name(), isMaintenance, isStopped);
+                                       if (first || (wasMaintenance!=isMaintenance) || (wasStopped!=isStopped))
+                                        emit exchangeStatus(name(), isMaintenance, isStopped);
                                     }
                                    }else{
                                         qDebug() << __PRETTY_FUNCTION__ << "wrong result from gethealth" << d;
