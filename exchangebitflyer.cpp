@@ -196,9 +196,12 @@ void ExchangeBitFlyer::requestFinished(QNetworkReply *reply)
         // search in map
         auto it = _pendingReplies.find(reply);
         if (it!= _pendingReplies.end()) {
-            auto &fn = (*it).second;
-            fn(reply);
+            auto &fn = (*it).second._resultFn;
+            const QString &path = (*it).second._path;
+
             _pendingReplies.erase(reply);
+            _pendingRequests.erase(path);
+            fn(reply);
         } else {
             qWarning() << __PRETTY_FUNCTION__ << "couldnt find reply in pendingReplies map!" << reply;
         }
@@ -212,6 +215,15 @@ bool ExchangeBitFlyer::triggerApiRequest(const QString &path, bool doSign, bool 
 {
     if (path.length()==0) return false;
     if (!doGet && !postData) return false;
+
+    // check whether a request is still pending
+    auto tit = _pendingRequests.find(path);
+    if (tit != _pendingRequests.cend()) {
+        // check whether it timed out?
+        // in that case we might need to call the resultFn here and delete the request
+        qWarning() << __PRETTY_FUNCTION__ << "ignoring request" << path << "as it's still pending since" << (*tit).second;
+        return false;
+    }
 
     QNetworkRequest req;
     QUrl url;
@@ -253,7 +265,8 @@ bool ExchangeBitFlyer::triggerApiRequest(const QString &path, bool doSign, bool 
     // add to processing map
     if (reply) {
         _pendingReplies.insert(std::make_pair(reply,
-                                              resultFn));
+                                              PendingReply(path, resultFn)));
+        _pendingRequests.insert(std::make_pair(path, QDateTime::currentDateTime()));
         return true;
     } else
         qWarning() << __PRETTY_FUNCTION__ << "reply null!" << url;
@@ -275,7 +288,7 @@ void ExchangeBitFlyer::triggerGetHealth()
                                    if (d.isObject()) {
                                     QString health = d.object()["status"].toString();
                                     if (health != _health) {
-                                       qDebug() << __PRETTY_FUNCTION__ << "got health=" << health;
+                                       // qDebug() << __PRETTY_FUNCTION__ << "got health=" << health; // NORMAL, BUSY, VERY BUSY, SUPER BUSY, STOP
                                        _health = health;
                                        bool isMaintenance = health.compare("STOP")==0;
                                        bool isStopped = isMaintenance;

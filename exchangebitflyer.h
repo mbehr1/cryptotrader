@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QNetworkAccessManager>
 #include <QJsonArray>
+#include <QDateTime>
 #include "exchange.h"
 #include "pubnub_api_types.h"
 #include "channel.h"
@@ -50,7 +51,22 @@ private:
     std::map<CHANNELTYPE, std::shared_ptr<Channel>> _subscribedChannels;
     // for normal api access via https://api.bitflyer.jp/v1/
     QNetworkAccessManager _nam;
-    std::map<QNetworkReply*, std::function<void(QNetworkReply*)>> _pendingReplies;
+
+    typedef std::function<void(QNetworkReply*)> ResultFn;
+
+    class PendingReply
+    {
+    public:
+        PendingReply(const QString &path,
+                     const ResultFn &fn) :
+            _path(path), _resultFn(fn) {}
+        PendingReply() = delete;
+
+        QString _path;
+        ResultFn _resultFn;
+    };
+
+    std::map<QNetworkReply*, PendingReply> _pendingReplies;
 
     // dynamic infos:
     QString _health;
@@ -59,6 +75,7 @@ private:
     QJsonArray _meOrders;
     std::map<QString, QJsonArray> _meBalancesMap; // by type
     std::map<QString, QJsonObject> _meOrdersMap; // child orders by child_order_acceptance_id
+    std::map<QString, QDateTime> _pendingRequests;
 
     bool triggerApiRequest(const QString &path, bool doSign,
                            bool doGet, QByteArray *postData,
