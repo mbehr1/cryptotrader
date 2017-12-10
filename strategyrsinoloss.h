@@ -13,7 +13,7 @@ class StrategyRSINoLoss : public QObject
 public:
     explicit StrategyRSINoLoss(const QString &exchange, const QString &id, const QString &tradePair, const double &buyValue,
                                const double &rsiBuy, const double &rsiHold,
-                               std::shared_ptr<ProviderCandles> provider, QObject *parent = 0, bool generateMakerPrices=true, double marginFactor=1.006, bool useBookPrices=false);
+                               std::shared_ptr<ProviderCandles> provider, QObject *parent = 0, bool generateMakerPrices=true, double marginFactor=1.006, bool useBookPrices=false, double sellFactor = 1.0);
     virtual ~StrategyRSINoLoss();
     void setChannelBook(std::shared_ptr<ChannelBooks> book);
     QString getStatusMsg() const;
@@ -49,7 +49,9 @@ protected:
     double _persFundAmount; // how much do we hold
     double _persPrice; // what was the price we bought it
     double _profit;
+    double _profitTradeCur; // e.g. in BTC. it's from _sellFactor
     const double _marginFactor; // = 1.006; // sell at >2*0.2% gain
+    const double _sellFactor; // 1 = we sell 100% of what we bought. otherwise we sell only persFundAmount * sellFactor
     // todo add transactionFeeFactor !
     const double _rsiBuy; //  = 25;
     const double _rsiHold; // = 59; // don't sell even if margin is met but rsi below that value

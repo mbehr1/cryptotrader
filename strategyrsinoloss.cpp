@@ -7,7 +7,7 @@
 
 StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id, const QString &tradePair, const double &buyValue,
                                      const double &rsiBuy, const double &rsiHold, std::shared_ptr<ProviderCandles> provider, QObject *parent,
-                                     bool generateMakerPrices, double marginFactor, bool useBookPrices) : QObject(parent)
+                                     bool generateMakerPrices, double marginFactor, bool useBookPrices, double sellFactor) : QObject(parent)
   , _exchange(exchange)
   , _id(id)
   , _tradePair(tradePair)
@@ -23,6 +23,7 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id,
   , _lastPrice(0.0)
   , _settings("mcbehr.de", QString("cryptotrader_strategyrsinoloss%1").arg(_id))
   , _marginFactor(marginFactor)
+  , _sellFactor(sellFactor)
   , _rsiBuy(rsiBuy)
   , _rsiHold(rsiHold)
   , _buyValue(buyValue)
@@ -38,7 +39,7 @@ StrategyRSINoLoss::StrategyRSINoLoss(const QString &exchange, const QString &id,
         } else
             _profit = 0.0;
     }
-
+    _profitTradeCur = _settings.value("ProfitTradeCur", 0.0).toDouble();
     _paused = _settings.value("paused", false).toBool();
     _waitForFundsUpdate = _settings.value("waitForFundsUpdate", false).toBool();
     qDebug() << __PRETTY_FUNCTION__ << _id << _tradePair << "got" << _persFundAmount << "bought at " << _persPrice;
@@ -55,6 +56,7 @@ StrategyRSINoLoss::~StrategyRSINoLoss()
     qDebug() << __PRETTY_FUNCTION__ << _id;
     _settings.setValue("paused", _paused);
     _settings.setValue("waitForFundsUpdate", _waitForFundsUpdate);
+    _settings.setValue("ProfitTradeCur", _profitTradeCur);
     // FundAmount and Price already set
 }
 
@@ -116,6 +118,12 @@ void StrategyRSINoLoss::onCandlesUpdated()
         //qDebug() << _id << "waiting for price to be higher than" << _persPrice * _marginFactor << "and rsi higher than" << _rsiHold;
         if (avgBidPrice > (_persPrice * _marginFactor) && rsi > _rsiHold) {
             // sell all
+            if (_sellFactor < 1.0 && _sellFactor >= 0.0) {
+                double keeping = (_persFundAmount - (_persFundAmount * _sellFactor));
+                qDebug() << __PRETTY_FUNCTION__ << "keeping" << keeping << _tradePair;
+                _profitTradeCur += keeping;
+                _persFundAmount *= _sellFactor;
+            }
             double amountToSell = _persFundAmount; // we reduced the fee already on fundsUpdate * 0.999;
             _waitForFundsUpdate = true;
             _valueSold += amountToSell * avgBidPrice;
@@ -170,6 +178,7 @@ void StrategyRSINoLoss::onFundsUpdated(double amount, double price, QString pair
     _settings.setValue("FundAmount", _persFundAmount);
     _settings.setValue("Price", _persPrice);
     _settings.setValue("Profit", _profit);
+    _settings.setValue("ProfitTradeCur", _profitTradeCur);
     _settings.sync();
     qDebug() << _id << "new data:" << _persFundAmount << _persPrice << _profit;
 
@@ -182,6 +191,7 @@ QString StrategyRSINoLoss::getStatusMsg() const
     double curValue = _persFundAmount * _lastPrice;
     msg.append(QString("RSINoLoss%1 on %2:\n").arg(_id).arg(_exchange));
     msg.append(QString(" profit: %1 %2\n").arg(_profit).arg(_profit+curValue));
+    msg.append(QString(" profit: %1 %2\n").arg(_profitTradeCur).arg(_tradePair));
     msg.append(QString(" amount bought: %1 %2\n").arg(_persFundAmount).arg(_tradePair));
     msg.append(QString(" bought price : %1\n").arg(_persPrice));
     if (_halted)

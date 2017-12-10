@@ -298,7 +298,8 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
 
         if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[channel->_symbol], this,
+                    true, 1.006, false, 0.999 );
             if (_channelBookMap[channel->_symbol])
                 strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
             connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
@@ -307,7 +308,8 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
         }
         if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this,
+                    true, 1.006, false, 0.999 );
             if (_channelBookMap[channel->_symbol])
                 strategy2->setChannelBook(_channelBookMap[channel->_symbol]);
             connect(&(*strategy2), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
@@ -316,7 +318,8 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
         }
         if (channel->_symbol == "tBTCUSD")
         {
-            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this);
+            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this,
+                    true, 1.007, false, 0.998);
             if (_channelBookMap[channel->_symbol])
                 strategy1->setChannelBook(_channelBookMap[channel->_symbol]);
             connect(&(*strategy1), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
