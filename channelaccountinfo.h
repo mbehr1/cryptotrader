@@ -28,6 +28,7 @@ public:
         double _price;
         QString _status;
         double _fee;
+        double _feeForAmount; // which amount was the fee for?
         QString _feeCur;
         bool _complete;
         bool _emittedComplete;

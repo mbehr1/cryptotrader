@@ -26,7 +26,7 @@ void ChannelAccountInfo::onCheckPending()
     for (auto &oit : _orders) {
         OrderItem &order = oit.second;
         if (order._complete && !order._emittedComplete) {
-            qDebug() << __FUNCTION__ << "oc without known fee" << order._cid << order._amount << order._price << order._status << "fee=" << order._fee << order._feeCur;
+            qDebug() << __FUNCTION__ << "oc without known fee" << order._cid << order._amount << order._price << order._status << "fee=" << order._fee << order._feeCur << order._feeForAmount;
             // estimate fee:
             if (!order._feeCur.length()) {
                 // amount > 0 (buy) -> fee in first cur
@@ -140,10 +140,11 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                 if (order._cid) {
                                     // update fee for order. We might get multiple trades for one order for partially executed ones
                                     order._fee += ti._fee;
+                                    order._feeForAmount += ti._amount;
                                     if (!order._feeCur.length())
                                         order._feeCur = ti._feeCur;
                                     else if (order._feeCur != ti._feeCur) qWarning() << __PRETTY_FUNCTION__ << "different feeCur for " << data;
-                                    if  (order._complete) {
+                                    if  (order._complete && (order._feeForAmount == order._amount)) { // todo should use better compare! But for now it doesn't matter as the timeout will emit it
                                         qDebug() << __FUNCTION__ << "oc with fee" << order._cid << order._amount << order._price << order._status << "fee=" << order._fee << order._feeCur;
                                         if (!order._emittedComplete) {
                                             order._emittedComplete = true;
@@ -251,7 +252,7 @@ void ChannelAccountInfo::processFundUpdate(const QJsonArray &data)
 }
 
 ChannelAccountInfo::OrderItem::OrderItem(const QJsonArray &data) :
-    _price(0.0), _fee(0.0), _complete(false), _emittedComplete(false)
+    _price(0.0), _fee(0.0), _feeForAmount(0.0), _complete(false), _emittedComplete(false)
 {
     operator =(data);
 }
