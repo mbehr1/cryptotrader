@@ -152,6 +152,8 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                         } else {
                                             qWarning() << __PRETTY_FUNCTION__ << "oc with fee but already emitted!" << order._cid;
                                         }
+                                    } else {
+                                        qDebug() << __PRETTY_FUNCTION__ << action << "fee update without emit" << order._cid << order._complete << order._emittedComplete << order._amount << order._feeForAmount << ti._fee << ti._feeCur;
                                     }
                                 }
                             } else {
