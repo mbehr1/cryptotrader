@@ -34,10 +34,9 @@ public slots:
     void onSubscriberMsg(QString msg);
     void onSlowMsgTimer();
 protected:
-    //ExchangeBitfinex _exchange;
     std::map<QString, std::shared_ptr<Exchange>> _exchanges;
-    std::map<QString, std::shared_ptr<ProviderCandles>> _providerCandlesMap; // by pair
-    std::map<QString, std::shared_ptr<ChannelBooks>> _channelBookMap; // by pair
+    std::map<QString, std::shared_ptr<ProviderCandles>> _providerCandlesMap; // by exchange->name():pair
+    std::map<QString, std::shared_ptr<ChannelBooks>> _channelBookMap; // by exchange->name():pair
     std::forward_list<std::shared_ptr<TradeStrategy>> _strategies;
 
     class FundsUpdateMapEntry

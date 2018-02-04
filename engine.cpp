@@ -49,6 +49,11 @@ Engine::FundsUpdateMapEntry::operator QJsonObject() const
     return o;
 }
 
+QString mapName( const Exchange *exchange, const QString &pair)
+{
+    return QString("%1:%2").arg(exchange ? exchange->name() : QString("null")).arg(pair);
+}
+
 Engine::Engine(QObject *parent) : QObject(parent)
 {
     // read telegram token from settings
@@ -180,14 +185,14 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
 
         // for bitFlyer we allocate them static
-        _providerCandlesMap["FX_BTC_JPY"] =
+        _providerCandlesMap[mapName(exchange.get(), "FX_BTC_JPY")] =
                 std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(exchange->getChannel(ExchangeBitFlyer::Trades)), this);
 
 
         // and we can configure the strategy here as well:
         {
             std::shared_ptr<StrategyRSINoLoss> strategy5 =
-                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 15000.0, 31, 59, _providerCandlesMap["FX_BTC_JPY"], this, false, 1.002);
+                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 15000.0, 31, 59, _providerCandlesMap[mapName(exchange.get(), "FX_BTC_JPY")], this, false, 1.002);
             strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel(ExchangeBitFlyer::Book)));
             connect(&(*strategy5), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
@@ -262,78 +267,80 @@ void Engine::onExchangeStatus(QString exchange, bool isMaintenance, bool isStopp
 void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
 {
     qDebug() << __PRETTY_FUNCTION__ << channel->_id <<channel->_channel << channel->_symbol << channel->_pair;
-    if (!_providerCandlesMap[channel->_symbol] && channel->_channel.compare("trades")==0) {
-        _providerCandlesMap[channel->_symbol] = std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(channel), this);
+    QString mapN = mapName(channel->exchange(), channel->_symbol);
+    if (!_providerCandlesMap[mapN] && channel->_channel.compare("trades")==0) {
+        _providerCandlesMap[mapN] = std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(channel), this);
 
-        // we can setup the strategies here as well:
-        if (channel->_symbol == "tXRPUSD")
-        {
-            std::shared_ptr<StrategyRSINoLoss> strategy = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#6"), channel->_symbol,
-                                                                                              200.0, 15, 57, _providerCandlesMap[channel->_symbol], this);
-            if (_channelBookMap[channel->_symbol])
-                strategy->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
-            _strategies.push_front(strategy);
-        }
+        if (channel->exchange() && channel->exchange()->name() == bitfinexName) {
+            // we can setup the strategies here as well:
+            if (channel->_symbol == "tXRPUSD")
+            {
+                std::shared_ptr<StrategyRSINoLoss> strategy = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#6"), channel->_symbol,
+                                                                                                  200.0, 15, 57, _providerCandlesMap[mapN], this);
+                if (_channelBookMap[mapN])
+                    strategy->setChannelBook(_channelBookMap[mapN]);
+                connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                        this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+                _strategies.push_front(strategy);
+            }
 
-        if (channel->_symbol == "tBTGUSD")
-        {
-            std::shared_ptr<StrategyRSINoLoss> strategy = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#5"), channel->_symbol, 250.0, 13, 57, _providerCandlesMap[channel->_symbol], this);
-            if (_channelBookMap[channel->_symbol])
-                strategy->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
-            _strategies.push_front(strategy);
-        }
+            if (channel->_symbol == "tBTGUSD")
+            {
+                std::shared_ptr<StrategyRSINoLoss> strategy = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#5"), channel->_symbol, 250.0, 13, 57, _providerCandlesMap[mapN], this);
+                if (_channelBookMap[mapN])
+                    strategy->setChannelBook(_channelBookMap[mapN]);
+                connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                        this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+                _strategies.push_front(strategy);
+            }
 
-        if (channel->_symbol == "tBTGUSD")
-        {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#4"), channel->_symbol, 50.0, 17, 59, _providerCandlesMap[channel->_symbol], this);
-            if (_channelBookMap[channel->_symbol])
-                strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
-            _strategies.push_front(strategy3);
-        }
+            if (channel->_symbol == "tBTGUSD")
+            {
+                std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#4"), channel->_symbol, 50.0, 17, 59, _providerCandlesMap[mapN], this);
+                if (_channelBookMap[mapN])
+                    strategy3->setChannelBook(_channelBookMap[mapN]);
+                connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                        this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+                _strategies.push_front(strategy3);
+            }
 
-        if (channel->_symbol == "tBTCUSD")
-        {
-            std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[channel->_symbol], this,
-                    true, 1.006, false, 0.999 );
-            if (_channelBookMap[channel->_symbol])
-                strategy3->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
-            _strategies.push_front(strategy3);
+            if (channel->_symbol == "tBTCUSD")
+            {
+                std::shared_ptr<StrategyRSINoLoss> strategy3 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#3"), "tBTCUSD", 100.0, 15, 67, _providerCandlesMap[mapN], this,
+                        true, 1.006, false, 0.999 );
+                if (_channelBookMap[mapN])
+                    strategy3->setChannelBook(_channelBookMap[mapN]);
+                connect(&(*strategy3), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                        this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+                _strategies.push_front(strategy3);
+            }
+            if (channel->_symbol == "tBTCUSD")
+            {
+                std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[mapN], this,
+                        true, 1.006, false, 0.999 );
+                if (_channelBookMap[mapN])
+                    strategy2->setChannelBook(_channelBookMap[mapN]);
+                connect(&(*strategy2), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                        this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+                _strategies.push_front(strategy2);
+            }
+            if (channel->_symbol == "tBTCUSD")
+            {
+                std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[mapN], this,
+                        true, 1.007, false, 0.998);
+                if (_channelBookMap[mapN])
+                    strategy1->setChannelBook(_channelBookMap[mapN]);
+                connect(&(*strategy1), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                        this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+                _strategies.push_front(strategy1);
+            }
         }
-        if (channel->_symbol == "tBTCUSD")
-        {
-            std::shared_ptr<StrategyRSINoLoss> strategy2 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#2"), "tBTCUSD", 500.0, 17, 65, _providerCandlesMap[channel->_symbol], this,
-                    true, 1.006, false, 0.999 );
-            if (_channelBookMap[channel->_symbol])
-                strategy2->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy2), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
-            _strategies.push_front(strategy2);
-        }
-        if (channel->_symbol == "tBTCUSD")
-        {
-            std::shared_ptr<StrategyRSINoLoss> strategy1 = std::make_shared<StrategyRSINoLoss>(bitfinexName, QString("#1"), "tBTCUSD", 1000.0, 25, 59, _providerCandlesMap[channel->_symbol], this,
-                    true, 1.007, false, 0.998);
-            if (_channelBookMap[channel->_symbol])
-                strategy1->setChannelBook(_channelBookMap[channel->_symbol]);
-            connect(&(*strategy1), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
-                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
-            _strategies.push_front(strategy1);
-        }
-
     }
-    if (!_channelBookMap[channel->_symbol] && channel->_channel.compare("book")==0) {
-        _channelBookMap[channel->_symbol] = std::dynamic_pointer_cast<ChannelBooks>(channel);
+    if (!_channelBookMap[mapN] && channel->_channel.compare("book")==0) {
+        _channelBookMap[mapN] = std::dynamic_pointer_cast<ChannelBooks>(channel);
         for (auto &strategy : _strategies)
             if (strategy)
-                strategy->announceChannelBook(_channelBookMap[channel->_symbol]);
+                strategy->announceChannelBook(_channelBookMap[mapN]);
     }
 }
 
