@@ -19,13 +19,16 @@ extern "C" {
 #include "pubnub_helper.h"
 }
 
-static QString subscribedChannels("lightning_board_FX_BTC_JPY,lightning_executions_FX_BTC_JPY");
-
 ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObject *parent) :
     Exchange(parent, "cryptotrader_exchangebitflyer")
-  , _timer(this), _nam(this)
+  , _nam(this)
+  , _nrChannels(0)
 {
     qDebug() << __PRETTY_FUNCTION__ << name();
+
+    _subscribedChannelNames["FX_BTC_JPY"] = "lightning_board_FX_BTC_JPY,lightning_executions_FX_BTC_JPY";
+    _subscribedChannelNames["ETH_BTC"] = "lightning_board_ETH_BTC,lightning_executions_ETH_BTC";
+    _subscribedChannelNames["BCH_BTC"] = "lightning_board_BCH_BTC,lightning_executions_BCH_BTC";
 
     loadPendingOrders();
 
@@ -39,46 +42,53 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
     setAuthData(api, skey);
     triggerAuth();
 
+    assert(addPair("FX_BTC_JPY"));
+    assert(addPair("ETH_BTC"));
+    assert(addPair("BCH_BTC"));
 
-    // fill subscribed channels:
-    {
-        auto ch = std::make_shared<ChannelBooks>(this, (int)CHANNELTYPE::Book,
-                                                 "FX_BTC_JPY");
-        ch->setTimeoutIntervalMs(60000); // 60s timeout for bitflyer
-        _subscribedChannels[CHANNELTYPE::Book] = ch;
-        connect(&(*ch), SIGNAL(timeout(int, bool)),
-                this, SLOT(onChannelTimeout(int,bool)));
-    }
-    {
-        auto ch = std::make_shared<ChannelTrades>(this, (int)CHANNELTYPE::Trades,
-                                                 "FX_BTC_JPY", "FX_BTC_JPY");
-        ch->setTimeoutIntervalMs(60000); // 60s timeout for bitflyer
-        _subscribedChannels[CHANNELTYPE::Trades] = ch;
-        connect(&(*ch), SIGNAL(timeout(int, bool)),
-                this, SLOT(onChannelTimeout(int,bool)));
-    }
 
     // take care. Symbol must not start with "f" (hack isFunding... inside Channel...)
-
-
-    connect(&_timer, SIGNAL(timeout()),
-            this, SLOT(onTimerTimeout()));
-
-    QString pubKey;
-    QString keySub = "sub-c-52a9ab50-291b-11e5-baaa-0619f8945a4f";
-    _pn = std::make_shared<pubnub_qt>(pubKey, keySub);
-
-    connect(&(*_pn), SIGNAL(outcome(pubnub_res)),
-            this, SLOT(onPnOutcome(pubnub_res)));
-
-    qDebug() << "pubnub origin=" << _pn->origin();
-    auto res = _pn->subscribe(subscribedChannels);
-    qDebug() << "subscribe res=" << res << "success=" << (res==PNR_STARTED);
 
     connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer()));
 
     _queryTimer.setSingleShot(false);
     _queryTimer.start(5000); // each 5s
+}
+
+
+bool ExchangeBitFlyer::addPair(const QString &pair)
+{
+    if (_subscribedChannelNames.count(pair)==0) return false;
+
+    auto chb = std::make_shared<ChannelBooks>(this, ++_nrChannels,
+                                              pair);
+    chb->setTimeoutIntervalMs(5*60000); // 5m timeout for bitflyer
+    connect(&(*chb), SIGNAL(timeout(int, bool)),
+            this, SLOT(onChannelTimeout(int,bool)));
+
+    auto ch = std::make_shared<ChannelTrades>(this, ++_nrChannels,
+                                              pair, pair);
+    ch->setTimeoutIntervalMs(5*60000); // 5m timeout for bitflyer
+    connect(&(*ch), SIGNAL(timeout(int, bool)),
+            this, SLOT(onChannelTimeout(int,bool)));
+    _subscribedChannels[pair] = std::make_pair(chb, ch);
+
+    auto timer = std::make_shared<QTimer>(this);
+    // connect(timer.get(), SIGNAL(timeout()),this, SLOT(onTimerTimeout()));
+    connect(timer.get(), &QTimer::timeout, this, [this, pair]{onTimerTimeout(pair);});
+
+    QString pubKey;
+    QString keySub = "sub-c-52a9ab50-291b-11e5-baaa-0619f8945a4f";
+    auto pn = std::make_shared<pubnub_qt>(pubKey, keySub);
+
+    connect(&(*pn), &pubnub_qt::outcome, this, [this, pair](pubnub_res res){ onPnOutcome(res, pair);} );
+
+    qDebug() << "pubnub origin=" << pn->origin() << pair;
+    auto res = pn->subscribe(_subscribedChannelNames[pair]);
+    qDebug() << "subscribe " << pair << " res=" << res << "success=" << (res==PNR_STARTED);
+
+    _pns[pair] = std::make_pair(pn, timer);
+    return true;
 }
 
 void ExchangeBitFlyer::loadPendingOrders()
@@ -123,7 +133,11 @@ void ExchangeBitFlyer::storePendingOrders()
 ExchangeBitFlyer::~ExchangeBitFlyer()
 {
     qDebug() << __PRETTY_FUNCTION__ << name();
-    _timer.stop();
+    // stop all timer:
+    for (auto &pn : _pns) {
+        if (pn.second.second)
+            pn.second.second->stop();
+    }
     _queryTimer.stop();
     storePendingOrders(); // should be called on change anyhow but to be on the safe side
 }
@@ -140,17 +154,19 @@ void ExchangeBitFlyer::onQueryTimer()
 { // keep limit 100/min!
     triggerGetHealth();
     triggerGetBalance();
-    triggerGetOrders();
+    triggerGetOrders("FX_BTC_JPY");
+    triggerGetOrders("ETH_BTC");
+    triggerGetOrders("BCH_BTC");
     //triggerGetExecutions();
     triggerGetMargins();
 }
 
-std::shared_ptr<Channel> ExchangeBitFlyer::getChannel(CHANNELTYPE type) const
+std::shared_ptr<Channel> ExchangeBitFlyer::getChannel(const QString &pair, CHANNELTYPE type) const
 {
     std::shared_ptr<Channel> toRet;
-    auto it = _subscribedChannels.find(type);
+    auto it = _subscribedChannels.find(pair);
     if (it != _subscribedChannels.cend()) {
-        toRet = (*it).second;
+        toRet = type == Book ? (*it).second.first : (*it).second.second;
     }
     return toRet;
 }
@@ -158,36 +174,40 @@ std::shared_ptr<Channel> ExchangeBitFlyer::getChannel(CHANNELTYPE type) const
 void ExchangeBitFlyer::onChannelTimeout(int id, bool isTimeout)
 {
     qWarning() << __PRETTY_FUNCTION__ << id << isTimeout;
-    emit channelTimeout(name(), id, isTimeout); // todo need to pass exchange as well as param (or name)
+    emit channelTimeout(name(), id, isTimeout);
 }
 
-void ExchangeBitFlyer::onPnOutcome(pubnub_res result)
+void ExchangeBitFlyer::onPnOutcome(pubnub_res result, const QString &pair)
 {
+    auto &pn = _pns[pair];
+    assert(pn.first && pn.second);
     if (result == PNR_OK) {
         _isConnected = true;
-        auto msgs = _pn->get_all();
+        auto msgs = pn.first->get_all();
         for (auto &msg : msgs) {
-            processMsg(msg);
+            processMsg(pair, msg);
         }
-        auto res = _pn->subscribe(subscribedChannels);
+        auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
         if (res != PNR_STARTED) {
             qDebug() << "subscribe res=" << res << pubnub_res_2_string(res);
-            _timer.start(500); // try again in 500ms
+            pn.second->start(500); // try again in 500ms
         }
     } else {
-        qDebug() << __PRETTY_FUNCTION__ << result << pubnub_res_2_string(result) << _pn->last_http_code();
-        _timer.start(500); // try again in 500ms
+        qDebug() << __PRETTY_FUNCTION__ << pair << result << pubnub_res_2_string(result) << pn.first->last_http_code();
+        pn.second->start(500); // try again in 500ms
     }
 }
 
-void ExchangeBitFlyer::onTimerTimeout()
+void ExchangeBitFlyer::onTimerTimeout(const QString &pair)
 {
-    auto msgs = _pn->get_all();
+    auto &pn = _pns[pair];
+    assert(pn.first && pn.second);
+    auto msgs = pn.first->get_all();
     for (auto &msg : msgs) {
-        processMsg(msg);
+        processMsg(pair, msg);
     }
-    auto res = _pn->subscribe(subscribedChannels);
-    qDebug() << "subscribe res=" << res << "success=" << pubnub_res_2_string(res);
+    auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
+    qDebug() << "subscribe " << pair << " res=" << res << "success=" << pubnub_res_2_string(res);
 }
 
 void ExchangeBitFlyer::requestFinished(QNetworkReply *reply)
@@ -328,7 +348,9 @@ void ExchangeBitFlyer::triggerAuth()
                                     _isAuth = true;
                                     _mePermissions = d.array();
                                     qDebug() << __PRETTY_FUNCTION__ << "got auth permissions=" << _mePermissions;
-                                    triggerCheckCommissions();
+                                    triggerCheckCommissions("FX_BTC_JPY");
+                                    triggerCheckCommissions("ETH_BTC");
+                                    triggerCheckCommissions("BCH_BTC");
                                    }else{
                                         qDebug() << __PRETTY_FUNCTION__ << "wrong result from getpermissions" << d;
                                         _isAuth = false;
@@ -340,12 +362,13 @@ void ExchangeBitFlyer::triggerAuth()
     }
 }
 
-void ExchangeBitFlyer::triggerCheckCommissions()
+void ExchangeBitFlyer::triggerCheckCommissions(const QString &pair)
 {
-    QByteArray path("/v1/me/gettradingcommission?product_code=FX_BTC_JPY");
+    QByteArray path;
+    path.append(QString("/v1/me/gettradingcommission?product_code=%1").arg(pair));
 
     if (!triggerApiRequest(path, true, true, 0,
-                                              [this](QNetworkReply *reply) {
+                                              [this, pair](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        emit subscriberMsg(QString("couldn't get commission! (%1 %2)").arg(reply->error()).arg(QString(reply->readAll())));
@@ -358,9 +381,9 @@ void ExchangeBitFlyer::triggerCheckCommissions()
                                        // check whether is for free
                                        if (d.object().contains("commission_rate")) {
                                             double rate = d.object()["commission_rate"].toDouble();
-                                            _commission_rates["FX_BTC_JPY"] = rate;
+                                            _commission_rates[pair] = rate;
                                             if (rate != 0.0) {
-                                                emit subscriberMsg(QString("commission rate FX_BTC_JPY=%1. Expected 0!").arg(rate));
+                                                emit subscriberMsg(QString("commission rate %2=%1. Expected 0!").arg(rate).arg(pair));
                                             }
 
                                        } else {
@@ -515,16 +538,17 @@ void ExchangeBitFlyer::triggerGetExecutions()
 
 }
 
-void ExchangeBitFlyer::triggerGetOrders()
+void ExchangeBitFlyer::triggerGetOrders(const QString &pair)
 {
-    QByteArray path("/v1/me/getchildorders?product_code=FX_BTC_JPY"); //  got orders= QJsonArray([{"average_price":0,"cancel_size":0,"child_order_acceptance_id":"JRF20171123-233841-855193","child_order_date":"2017-11-23T23:38:42","child_order_id":"JOR20171123-233841-222277","child_order_state":"ACTIVE","child_order_type":"LIMIT","executed_size":0,"expire_date":"2017-11-24T00:38:41","id":0,"outstanding_size":0.01,"price":921500,"product_code":"BTC_JPY","side":"SELL","size":0.01,"total_commission":1.5e-05}])
+    QByteArray path("/v1/me/getchildorders?product_code=");
+    path.append(pair); //  got orders= QJsonArray([{"average_price":0,"cancel_size":0,"child_order_acceptance_id":"JRF20171123-233841-855193","child_order_date":"2017-11-23T23:38:42","child_order_id":"JOR20171123-233841-222277","child_order_state":"ACTIVE","child_order_type":"LIMIT","executed_size":0,"expire_date":"2017-11-24T00:38:41","id":0,"outstanding_size":0.01,"price":921500,"product_code":"BTC_JPY","side":"SELL","size":0.01,"total_commission":1.5e-05}])
     // QJsonArray([{"average_price":912612,"cancel_size":0,"child_order_acceptance_id":"JRF20171124-153649-181288","child_order_date":"2017-11-24T15:36:49","child_order_id":"JOR20171124-153656-987091","child_order_state":"COMPLETED","child_order_type":"LIMIT","executed_size":0.01,"expire_date":"2017-11-24T16:36:49","id":161335008,"outstanding_size":0,"price":912000,"product_code":"BTC_JPY","side":"SELL","size":0.01,"total_commission":1.5e-05}])
     //path.append(QString("?child_order_acceptance_id=JRF20171123-233841-855193"));
 
     if (!triggerApiRequest(path, true, true, 0,
-                                              [this](QNetworkReply *reply) {
+                                              [this, pair](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error() << reply->readAll();
+                                       qCritical() << __PRETTY_FUNCTION__ << pair << reply->errorString() << reply->error() << reply->readAll();
                                        // we don't update orders here. _meOrders = QJsonArray();
                                        return;
                                    }
@@ -533,13 +557,13 @@ void ExchangeBitFlyer::triggerGetOrders()
                                    if (d.isArray()) {
                                     updateOrders(d.array());
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from getorders" << arr;
+                                        qDebug() << __PRETTY_FUNCTION__ << pair << "wrong result from getorders" << arr;
                                         // we don't update orders here _meOrders = QJsonArray();
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qWarning() << __PRETTY_FUNCTION__ << pair << "triggerApiRequest failed!";
     }
 }
 
@@ -602,9 +626,9 @@ void ExchangeBitFlyer::updateOrders(const QJsonArray &arr)
 
 }
 
-void ExchangeBitFlyer::processMsg(const QString &msg)
+void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
 {
-    // qDebug() << __PRETTY_FUNCTION__ << msg;
+    //qWarning() << __PRETTY_FUNCTION__ << pair << msg;
     // check type of msgs.
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(msg.toLatin1(), &err);
@@ -613,7 +637,7 @@ void ExchangeBitFlyer::processMsg(const QString &msg)
         if (doc.isObject()) {
             const QJsonObject &obj = doc.object();
             if (obj.contains("mid_price")) {
-                auto &ch = _subscribedChannels[CHANNELTYPE::Book];
+                auto &ch = _subscribedChannels[pair].first;
                 assert(ch);
                 if (ch) {
                     ch->handleDataFromBitFlyer(obj);
@@ -628,7 +652,7 @@ void ExchangeBitFlyer::processMsg(const QString &msg)
                     if (e.isObject()) {
                         const QJsonObject &obj = e.toObject();
                         if (obj.contains("side")) {
-                            auto &ch = _subscribedChannels[CHANNELTYPE::Trades];
+                            auto &ch = _subscribedChannels[pair].second;
                             assert(ch);
                             if (ch) {
                                 ch->handleDataFromBitFlyer(obj);
@@ -645,7 +669,6 @@ void ExchangeBitFlyer::processMsg(const QString &msg)
                                         double amount = obj["size"].toDouble();
                                         double price = obj["price"].toDouble();
                                         QString status = "COMPLETED BUY WO FEE(MARGIN)";
-                                        QString pair = "FX_BTC_JPY"; // todo store in map?
                                         emit orderCompleted(name(), (*it).second, amount, price, status, pair, 0.0, QString());
                                         _pendingOrdersMap.erase(it);
                                         storePendingOrders();
@@ -656,7 +679,6 @@ void ExchangeBitFlyer::processMsg(const QString &msg)
                                             double amount = -obj["size"].toDouble();
                                             double price = obj["price"].toDouble();
                                             QString status = "COMPLETED SELL WO FEE(MARGIN)";
-                                            QString pair = "FX_BTC_JPY"; // todo store in map?
                                             emit orderCompleted(name(), (*it).second, amount, price, status, pair, 0.0, QString());
                                             _pendingOrdersMap.erase(it);
                                             storePendingOrders();

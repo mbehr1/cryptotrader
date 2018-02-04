@@ -34,25 +34,29 @@ public:
     virtual void reconnect() override;
 
     typedef enum {Book=0, Trades} CHANNELTYPE;
-    std::shared_ptr<Channel> getChannel(CHANNELTYPE type) const;
+    std::shared_ptr<Channel> getChannel(const QString &pair, CHANNELTYPE type) const;
 signals:
 private Q_SLOTS:
-    void onTimerTimeout();
+    void onTimerTimeout(const QString &pair);
     void onQueryTimer();
-    void onPnOutcome(pubnub_res result);
+    void onPnOutcome(pubnub_res result, const QString &pair);
     void onChannelTimeout(int id, bool isTimeout);
     void requestFinished(QNetworkReply *reply);
 
 
 private:
-    std::shared_ptr<pubnub_qt> _pn;
-    QTimer _timer;
+    std::map<QString, QString> _subscribedChannelNames;
+    std::map<QString, std::pair<std::shared_ptr<pubnub_qt>, std::shared_ptr<QTimer>>> _pns; // by pair
+    //QTimer _timer;
     QTimer _queryTimer; // triggers cyclic checks for order status,...
-    std::map<CHANNELTYPE, std::shared_ptr<Channel>> _subscribedChannels;
+    std::map<QString, std::pair<std::shared_ptr<ChannelBooks>, std::shared_ptr<Channel>>> _subscribedChannels;
     // for normal api access via https://api.bitflyer.jp/v1/
     QNetworkAccessManager _nam;
 
     typedef std::function<void(QNetworkReply*)> ResultFn;
+
+    bool addPair(const QString &pair);
+    int _nrChannels; // nr of created channels
 
     class PendingReply
     {
@@ -82,12 +86,12 @@ private:
                            const std::function<void(QNetworkReply*)> &resultFn);
     void triggerGetHealth();
     void triggerAuth();
-    void triggerCheckCommissions();
+    void triggerCheckCommissions(const QString &pair);
     void triggerGetBalance();
     void triggerGetMargins();
-    void triggerGetOrders();
+    void triggerGetOrders(const QString &pair);
     void triggerGetExecutions();
-    void processMsg(const QString &msg);
+    void processMsg(const QString &pair, const QString &msg);
     void updateBalances(const QString &type, const QJsonArray &arr);
     void updateOrders(const QJsonArray &arr);
 

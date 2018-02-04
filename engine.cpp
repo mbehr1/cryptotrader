@@ -186,14 +186,14 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
         // for bitFlyer we allocate them static
         _providerCandlesMap[mapName(exchange.get(), "FX_BTC_JPY")] =
-                std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(exchange->getChannel(ExchangeBitFlyer::Trades)), this);
+                std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(exchange->getChannel("FX_BTC_JPY", ExchangeBitFlyer::Trades)), this);
 
 
         // and we can configure the strategy here as well:
         {
             std::shared_ptr<StrategyRSINoLoss> strategy5 =
                     std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 15000.0, 31, 59, _providerCandlesMap[mapName(exchange.get(), "FX_BTC_JPY")], this, false, 1.002);
-            strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel(ExchangeBitFlyer::Book)));
+            strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel("FX_BTC_JPY", ExchangeBitFlyer::Book)));
             connect(&(*strategy5), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
             _strategies.push_front(strategy5);
