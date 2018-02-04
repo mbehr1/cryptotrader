@@ -311,6 +311,8 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
     (void) /* todo err hdlg */ subscribeChannel("trades", "tBTCUSD");
     (void) subscribeChannel("trades", "tBTGUSD");
     (void) subscribeChannel("trades", "tXRPUSD");
+    (void) subscribeChannel("trades", "tBCHBTC");
+    (void) subscribeChannel("trades", "tETHBTC");
     std::map<QString, QString> options;
     options.insert(std::make_pair<QString, QString>("prec", "P0"));
     options.insert(std::make_pair<QString, QString>("freq", "F0"));
@@ -319,6 +321,8 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
     (void) /* todo err hdlg */ subscribeChannel("book", "tBTCUSD", options);
     (void) subscribeChannel("book", "tBTGUSD", options);
     (void) subscribeChannel("book", "tXRPUSD", options);
+    (void) subscribeChannel("book", "tBCHBTC", options);
+    (void) subscribeChannel("book", "tETHBTC", options);
 
     emit exchangeStatus(name(), false, false);
 }
