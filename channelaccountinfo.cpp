@@ -4,8 +4,8 @@
 #include <QJsonArray>
 #include "channelaccountinfo.h"
 
-ChannelAccountInfo::ChannelAccountInfo() :
-    Channel(0, "Account Info", "", "")
+ChannelAccountInfo::ChannelAccountInfo(Exchange *exchange) :
+    Channel(exchange, 0, "Account Info", "", "")
 {
     _checkPendingTimer.setSingleShot(true);
     connect(&_checkPendingTimer, SIGNAL(timeout()), this, SLOT(onCheckPending()));

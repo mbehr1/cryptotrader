@@ -2,12 +2,11 @@
 #define STRATEGYRSINOLOSS_H
 
 #include <memory>
-#include <QObject>
-#include <QSettings>
+#include "tradestrategy.h"
 class ProviderCandles;
 class ChannelBooks;
 
-class StrategyRSINoLoss : public QObject
+class StrategyRSINoLoss : public TradeStrategy
 {
     Q_OBJECT
 public:
@@ -15,29 +14,24 @@ public:
                                const double &rsiBuy, const double &rsiHold,
                                std::shared_ptr<ProviderCandles> provider, QObject *parent = 0, bool generateMakerPrices=true, double marginFactor=1.006, bool useBookPrices=false, double sellFactor = 1.0);
     virtual ~StrategyRSINoLoss();
+    virtual void announceChannelBook(std::shared_ptr<ChannelBooks> book) override;
     void setChannelBook(std::shared_ptr<ChannelBooks> book);
-    QString getStatusMsg() const;
+    virtual QString getStatusMsg() const override;
     const QString &exchange() const { return _exchange; }
-    const QString &id() const { return _id; }
     const QString &tradePair() const { return _tradePair; }
-    QString onNewBotMessage(const QString &msg);
-    void setHalt(bool halt) { _halted = halt; }
+    virtual QString onNewBotMessage(const QString &msg) override;
+    virtual bool usesExchange(const QString &exc) const override { return exchange() == exc; }
 signals:
-    void tradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
 public slots:
+    virtual void onFundsUpdated(QString exchange, double amount, double price, QString pair, double fee, QString feeCur) override;
     void onCandlesUpdated();
-    void onFundsUpdated(double amount, double price, QString pair, double fee, QString feeCur);
 protected:
     QString _exchange;
-    QString _id;
     QString _tradePair; // e.g. tBTCUSD
     bool _generateMakerPrices;
     bool _useBookPrices;
     std::shared_ptr<ProviderCandles> _providerCandles;
     std::shared_ptr<ChannelBooks> _channelBook;
-    bool _paused; // persistent, manually set
-    bool _halted; // autom. e.g. during maintenance break
-    bool _waitForFundsUpdate;
 
     double _valueBought;
     double _valueSold;
@@ -45,7 +39,6 @@ protected:
     double _lastRSI;
     double _lastPrice;
     // specific for this strategy
-    QSettings _settings;
     double _persFundAmount; // how much do we hold
     double _persPrice; // what was the price we bought it
     double _profit;

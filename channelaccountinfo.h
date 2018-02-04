@@ -10,7 +10,7 @@ class ChannelAccountInfo : public Channel
 {
     Q_OBJECT
 public:
-    explicit ChannelAccountInfo();
+    explicit ChannelAccountInfo(Exchange *exchange);
     virtual ~ChannelAccountInfo();
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual QString getStatusMsg() const override;

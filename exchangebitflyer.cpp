@@ -42,7 +42,7 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
 
     // fill subscribed channels:
     {
-        auto ch = std::make_shared<ChannelBooks>((int)CHANNELTYPE::Book,
+        auto ch = std::make_shared<ChannelBooks>(this, (int)CHANNELTYPE::Book,
                                                  "FX_BTC_JPY");
         ch->setTimeoutIntervalMs(60000); // 60s timeout for bitflyer
         _subscribedChannels[CHANNELTYPE::Book] = ch;
@@ -50,7 +50,7 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
                 this, SLOT(onChannelTimeout(int,bool)));
     }
     {
-        auto ch = std::make_shared<ChannelTrades>((int)CHANNELTYPE::Trades,
+        auto ch = std::make_shared<ChannelTrades>(this, (int)CHANNELTYPE::Trades,
                                                  "FX_BTC_JPY", "FX_BTC_JPY");
         ch->setTimeoutIntervalMs(60000); // 60s timeout for bitflyer
         _subscribedChannels[CHANNELTYPE::Trades] = ch;

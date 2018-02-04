@@ -7,6 +7,7 @@
 #include <QTextStream>
 #include "engine.h"
 #include "signal.h"
+#include "strategyrsinoloss.h"
 #include "exchangebitfinex.h"
 #include "exchangebitflyer.h"
 
@@ -252,8 +253,8 @@ void Engine::onExchangeStatus(QString exchange, bool isMaintenance, bool isStopp
     qDebug() << __PRETTY_FUNCTION__ << exchange << isMaintenance << isStopped;
     // on maintenance or stopped halt all strategies that need that exchange
     for (auto &strategy : _strategies) {
-        if (strategy->exchange() == exchange) {
-            strategy->setHalt(isMaintenance||isStopped);
+        if (strategy->usesExchange(exchange)) {
+            strategy->setHalt(isMaintenance||isStopped, exchange);
         }
     }
 }
@@ -331,8 +332,8 @@ void Engine::onNewChannelSubscribed(std::shared_ptr<Channel> channel)
     if (!_channelBookMap[channel->_symbol] && channel->_channel.compare("book")==0) {
         _channelBookMap[channel->_symbol] = std::dynamic_pointer_cast<ChannelBooks>(channel);
         for (auto &strategy : _strategies)
-            if (strategy && strategy->tradePair() == channel->_symbol)
-                strategy->setChannelBook(_channelBookMap[channel->_symbol]);
+            if (strategy)
+                strategy->announceChannelBook(_channelBookMap[channel->_symbol]);
     }
 }
 
@@ -410,7 +411,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
             if (strategy && strategy->id() == entry._id) {
                 if (!entry._done) {
                     entry._done = true;
-                    strategy->onFundsUpdated(amount, price, pair, fee, feeCur);
+                    strategy->onFundsUpdated(exchange, amount, price, pair, fee, feeCur);
                 } else {
                     qWarning() << __PRETTY_FUNCTION__ << "sanity check failed! (tried to update twice)";
                 }

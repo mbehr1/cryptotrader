@@ -10,7 +10,7 @@
 
 #include "exchange.h"
 #include "providercandles.h"
-#include "strategyrsinoloss.h"
+#include "tradestrategy.h"
 #include "channel.h"
 
 class Engine : public QObject
@@ -38,7 +38,7 @@ protected:
     std::map<QString, std::shared_ptr<Exchange>> _exchanges;
     std::map<QString, std::shared_ptr<ProviderCandles>> _providerCandlesMap; // by pair
     std::map<QString, std::shared_ptr<ChannelBooks>> _channelBookMap; // by pair
-    std::forward_list<std::shared_ptr<StrategyRSINoLoss>> _strategies;
+    std::forward_list<std::shared_ptr<TradeStrategy>> _strategies;
 
     class FundsUpdateMapEntry
     {

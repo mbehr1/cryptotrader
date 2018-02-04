@@ -6,7 +6,8 @@
 
 #include "channel.h"
 
-Channel::Channel(int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed) :
+Channel::Channel(Exchange *exchange, int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed) :
+    _exchange(exchange),
     _timeoutMs(15000), _isSubscribed(subscribed), _isTimeout(false), _id(id), _channel(name), _symbol(symbol), _pair(pair)
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _channel << _symbol << _pair << _isSubscribed;
@@ -87,8 +88,8 @@ bool less(const double &a, const double &b)
     return a<b;
 }
 
-ChannelBooks::ChannelBooks(int id, const QString &symbol) :
-    Channel(id, QString("book"), symbol, QString()),
+ChannelBooks::ChannelBooks(Exchange *exchange, int id, const QString &symbol) :
+    Channel(exchange, id, QString("book"), symbol, QString()),
     _bids(greater),
    _asks(less)
 {
@@ -284,8 +285,8 @@ void ChannelBooks::printAsksBids() const
 
 }
 
-ChannelTrades::ChannelTrades(int id, const QString &symbol, const QString &pair)
- : Channel(id, "trades", symbol, pair)
+ChannelTrades::ChannelTrades(Exchange *exchange, int id, const QString &symbol, const QString &pair)
+ : Channel(exchange, id, "trades", symbol, pair)
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _symbol << _pair;
 }

@@ -1,10 +1,12 @@
 #ifndef CHANNEL_H
 #define CHANNEL_H
+#include <memory>
 #include <QObject>
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonArray>
 
+class Exchange;
 class ExchangeBitfinex;
 class Engine;
 
@@ -12,7 +14,7 @@ class Channel : public QObject
 {
     Q_OBJECT
 public:
-    Channel(int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed=true);
+    Channel(Exchange *exchange, int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed=true);
     virtual ~Channel();
     virtual bool handleChannelData(const QJsonArray &data);
     virtual bool handleDataFromBitFlyer(const QJsonObject &data);
@@ -21,6 +23,7 @@ public:
     const QString &channel() const { return _channel; }
     const QString &pair() const { return _pair; }
     const QString &symbol() const { return _symbol; }
+    const Exchange *exchange() const { return _exchange; }
     int id() const { return _id; }
     void setId(int id) { _id = id; }
     void setTimeoutIntervalMs(unsigned timeoutMs) { _timeoutMs = timeoutMs; }
@@ -30,6 +33,7 @@ signals:
 public slots:
 
 protected:
+    Exchange *_exchange;
     void timerEvent(QTimerEvent *event) override;
     qint64 _timeoutMs;
     friend class ExchangeBitfinex;
@@ -46,7 +50,7 @@ protected:
 class ChannelBooks : public Channel
 {
 public:
-    ChannelBooks(int id, const QString &symbol);
+    ChannelBooks(Exchange *exchange, int id, const QString &symbol);
     virtual ~ChannelBooks();
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;
@@ -75,7 +79,7 @@ protected:
 class ChannelTrades : public Channel
 {
 public:
-    ChannelTrades(int id, const QString &symbol, const QString &pair);
+    ChannelTrades(Exchange *exchange, int id, const QString &symbol, const QString &pair);
     virtual ~ChannelTrades();
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;

@@ -13,6 +13,7 @@
 ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
     Exchange(parent, "cryptotrader_exchangebitfinex")
   , _checkConnectionTimer(this)
+  , _accountInfoChannel(this)
 {
 
     // parse json test
@@ -415,12 +416,12 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
 
             std::shared_ptr<Channel> ptr;
             if (channel.compare("book")==0)
-                ptr = std::make_shared<ChannelBooks>(channelId, symbol);
+                ptr = std::make_shared<ChannelBooks>(this, channelId, symbol);
             else
                 if (channel.compare("trades")==0)
-                    ptr = std::make_shared<ChannelTrades>(channelId, symbol, pair);
+                    ptr = std::make_shared<ChannelTrades>(this, channelId, symbol, pair);
                 else
-                    ptr = std::make_shared<Channel>(channelId, channel, symbol, pair);
+                    ptr = std::make_shared<Channel>(this, channelId, channel, symbol, pair);
             _subscribedChannels.insert(std::make_pair(channelId, ptr));
             emit newChannelSubscribed(ptr);
             connect(&(*ptr), SIGNAL(timeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
