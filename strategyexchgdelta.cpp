@@ -67,6 +67,7 @@ QString StrategyExchgDelta::getStatusMsg() const
                  .arg(_exchg[0]._availCur1 + _exchg[1]._availCur1).arg(_cur1)
             .arg(_exchg[0]._availCur2 + _exchg[1]._availCur2).arg(_cur2));
 
+    toRet.append(_lastStatus);
     return toRet;
 }
 
@@ -199,7 +200,8 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
             priceBuy = price2Buy;
             priceSell = price1Sell;
         } else {
-            qDebug() << __PRETTY_FUNCTION__ << "prices interleave" << price1Buy << price1Sell << price2Buy << price2Sell;
+            _lastStatus = QString("prices interleave: E1 %1 %2 / E2 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell);
+            qDebug() << __PRETTY_FUNCTION__ << _lastStatus;
             return;
         }
     }
@@ -208,8 +210,9 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     if ((deltaPerc > _deltaMaxE1) && iSell == 0) _deltaMaxE1 = deltaPerc;
     if ((deltaPerc > _deltaMaxE2) && iSell == 1) _deltaMaxE2 = deltaPerc;
 
-
-    qWarning() << __PRETTY_FUNCTION__ << _pair << "maxE1=" << _deltaMaxE1 << "maxE2=" << _deltaMaxE2 << iBuy << priceSell << priceBuy << deltaPerc << "% delta" << msecsDiff << "ms";
+    _lastStatus = QString("maxE1=%1 maxE2=%2 curPerc=%3 priceSell=%4 priceBuy=%5 msd=%6").
+            arg(_deltaMaxE1).arg(_deltaMaxE2).arg(deltaPerc).arg(priceSell).arg(priceBuy).arg(msecsDiff);
+    qWarning() << __PRETTY_FUNCTION__ << _pair << _lastStatus;
     // strategy:
     // if deltaPerc > 1.x (const)  then buy at iBuy and sell at iSell
     if (deltaPerc > 0.8) { // 1% todo!
@@ -264,13 +267,16 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
             emit tradeAdvice(_exchg[iSell]._name, _id, _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.999); // slightly lower price for higher rel.
 
         }else{
-            if (likeToSellCur1 > 0.0) // todo adjust for minAmount
-                qWarning() << QString("would like to sell %1 %2 at %3. Would need %4 %5 at %6. Have only %7 %8.").arg(likeToSellCur1).arg(_cur1).arg(_exchg[iSell]._name)
+            if (likeToSellCur1 > 0.0) { // todo adjust for minAmount
+                _lastStatus = QString("would like to sell %1 %2 at %3. Would need %4 %5 at %6. Have only %7 %8.").arg(likeToSellCur1).arg(_cur1).arg(_exchg[iSell]._name)
                               .arg(likeToSellCur1*priceBuy).arg(_cur2).arg(_exchg[iBuy]._name)
                               .arg(_exchg[iBuy]._availCur2).arg(_cur2);
-            else
-                qWarning() << QString("would like to sell %1 at %2 but have none!").arg(_cur1).arg(_exchg[iSell]._name);
-
+                qWarning() << _lastStatus;
+            }
+            else {
+                _lastStatus = QString("would like to sell %1 at %2 but have none!").arg(_cur1).arg(_exchg[iSell]._name);
+                qWarning() << _lastStatus;
+            }
         }
 
     }

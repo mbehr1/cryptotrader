@@ -49,6 +49,7 @@ protected:
     // runtime data:
     double _deltaMaxE1;
     double _deltaMaxE2;
+    QString _lastStatus;
 };
 
 #endif // STRATEGYEXCHGDELTA_H
