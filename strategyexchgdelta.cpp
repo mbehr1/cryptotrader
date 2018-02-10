@@ -157,7 +157,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     // are both prices from within same time range?
     qint64 msecsDiff = _exchg[0]._book->lastMsgTime().msecsTo(_exchg[1]._book->lastMsgTime());
     if (msecsDiff < 0) msecsDiff = -msecsDiff;
-    if (msecsDiff > 1500) { // todo const
+    if (msecsDiff > 1000) { // todo const
         qDebug() << __PRETTY_FUNCTION__ << "book times differences too big!" << msecsDiff;
         return;
     }
@@ -298,18 +298,18 @@ void StrategyExchgDelta::onFundsUpdated(QString exchange, double amount, double 
         if (_exchg[i]._name == exchange) {
             // sell or buy via amount < 0
             // fee is neg on sell. and on buy? todo check
-            qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 before funds update: %1 %2 / %3 %4").arg(_exchg[i]._name).arg(_exchg[i]._availCur1).arg(_cur1).arg(_exchg[i]._availCur2).arg(_cur2);
+            qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 before funds update: %2 %3 / %4 %5").arg(_exchg[i]._name).arg(_exchg[i]._availCur1).arg(_cur1).arg(_exchg[i]._availCur2).arg(_cur2);
 
             _exchg[i]._availCur1 += amount;
             _exchg[i]._availCur2 -= (amount * price);
-            if (feeCur == _cur1)
-                _exchg[i]._availCur1 -= fee < 0.0 ? -fee : fee ;
-            else
-                _exchg[i]._availCur2 -= fee < 0.0 ? -fee : fee;
+            if (feeCur == _cur2)
+                _exchg[i]._availCur2 -= fee < 0.0 ? -fee : fee ;
+            else // we default to cur1 (e.g. bitFlyer has empty feeCur but uses cur1)
+                _exchg[i]._availCur1 -= fee < 0.0 ? -fee : fee;
 
             _exchg[i]._waitForOrder = false;
 
-            qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 after funds update: %1 %2 / %3 %4").arg(_exchg[i]._name).arg(_exchg[i]._availCur1).arg(_cur1).arg(_exchg[i]._availCur2).arg(_cur2);
+            qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 after funds update: %2 %3 / %4 %5").arg(_exchg[i]._name).arg(_exchg[i]._availCur1).arg(_cur1).arg(_exchg[i]._availCur2).arg(_cur2);
             return;
         }
     }
