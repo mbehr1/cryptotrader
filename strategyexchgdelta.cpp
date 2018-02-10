@@ -65,7 +65,7 @@ QString StrategyExchgDelta::getStatusMsg() const
     }
     toRet.append(QString("\nSum: %1 %2 / %3 %4\n")
                  .arg(_exchg[0]._availCur1 + _exchg[1]._availCur1).arg(_cur1)
-            .arg(_exchg[0]._availCur2 + _exchg[1]._availCur2).arg(_cur1));
+            .arg(_exchg[0]._availCur2 + _exchg[1]._availCur2).arg(_cur2));
 
     return toRet;
 }
