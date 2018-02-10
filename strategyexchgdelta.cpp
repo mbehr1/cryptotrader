@@ -26,9 +26,7 @@ StrategyExchgDelta::StrategyExchgDelta(const QString &id, const QString &pair, c
 
     _exchg[0]._availCur1 = _settings.value("AmountCur1E1", 0.0).toDouble();
     _exchg[1]._availCur1 = _settings.value("AmountCur1E2", 0.0).toDouble();
-    // _exchg[1]._availCur1 = 10.0; // todo for test only!
     _exchg[0]._availCur2 = _settings.value("AmountCur2E1", 0.0).toDouble();
-    //_exchg[0]._availCur2 = 1.0; // todo for test only!
     _exchg[1]._availCur2 = _settings.value("AmountCur2E2", 0.0).toDouble();
 
 }
@@ -304,7 +302,7 @@ void StrategyExchgDelta::onFundsUpdated(QString exchange, double amount, double 
     for (int i=0; i<=1; ++i) {
         if (_exchg[i]._name == exchange) {
             // sell or buy via amount < 0
-            // fee is neg on sell. and on buy? todo check
+            // fee is neg on sell. and on buy?
             qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 before funds update: %2 %3 / %4 %5").arg(_exchg[i]._name).arg(_exchg[i]._availCur1).arg(_cur1).arg(_exchg[i]._availCur2).arg(_cur2);
 
             _exchg[i]._availCur1 += amount;

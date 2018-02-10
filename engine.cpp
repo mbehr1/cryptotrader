@@ -203,6 +203,18 @@ Engine::Engine(QObject *parent) : QObject(parent)
         }
 
         if(1){
+            std::shared_ptr<StrategyExchgDelta> strategy = std::make_shared<StrategyExchgDelta>(QString("#d2"), "ETHBTC",
+                                                                                              bitfinexName, bitFlyerName, this);
+            connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
+
+            // bitfinex channels will not be created dynamically:
+            strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel("ETH_BTC", ExchangeBitFlyer::Book)));
+            connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+            _strategies.push_front(strategy);
+        }
+
+        if(1){
             std::shared_ptr<StrategyExchgDelta> strategy = std::make_shared<StrategyExchgDelta>(QString("#d1"), "BCHBTC",
                                                                                               bitfinexName, bitFlyerName, this);
             connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool))); // todo connect for other strats as well
