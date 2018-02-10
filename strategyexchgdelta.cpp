@@ -218,14 +218,8 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
         double moneyToBuyCur2 = getAvailAmount(_exchg[iBuy], _cur2);
         double amountSellCur1 = getAvailAmount(_exchg[iSell], _cur1);
 
-        // todo limit amounts?
-        if (amountSellCur1 > 0.01)
-            amountSellCur1 = 0.01;
-
         // do we have to take fees into consideration? the 1% (todo const) needs to be high enough to compensate for both fees!
         // todo assert this in constructor already
-
-
 
         // calc amounts to sell/buy
         double likeToSellCur1 = amountSellCur1;
@@ -234,7 +228,17 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
         }
 
         // do we have amounts?
-        if (amountSellCur1> 0.001) { // todo min amount
+        double minAmount = 0.0001; // todo use const for the case unknown at exchange
+        // now get from exchanges:
+        double minTemp;
+        if (_exchg[iSell]._book->exchange()->getMinAmount(_exchg[iSell]._book->symbol(), minTemp)) {
+            if (minTemp > minAmount) minAmount = minTemp;
+        }
+        if (_exchg[iBuy]._book->exchange()->getMinAmount(_exchg[iBuy]._book->symbol(), minTemp)) {
+            if (minTemp > minAmount) minAmount = minTemp;
+        }
+
+        if (amountSellCur1>= minAmount) {
             QString str;
 
             str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(_cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(_cur2).arg(_exchg[iSell]._name);
@@ -259,7 +263,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
             emit tradeAdvice(_exchg[iSell]._name, QString("%1_%2").arg(_id).arg(2), _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.9999); // slightly lower price for higher rel.
 
         }else{
-            if (likeToSellCur1 > 0.0)
+            if (likeToSellCur1 > 0.0) // todo adjust for minAmount
                 qWarning() << QString("would like to sell %1 %2 at %3. Would need %4 %5 at %6. Have only %7 %8.").arg(likeToSellCur1).arg(_cur1).arg(_exchg[iSell]._name)
                               .arg(likeToSellCur1*priceBuy).arg(_cur2).arg(_exchg[iBuy]._name)
                               .arg(_exchg[iBuy]._availCur2).arg(_cur2);

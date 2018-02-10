@@ -172,6 +172,11 @@ bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, do
     return false;
 }
 
+bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount)
+{
+    return false; // currently we don't know
+}
+
 void ExchangeBitFlyer::onQueryTimer()
 { // keep limit 100/min!
     triggerGetHealth();

@@ -76,6 +76,15 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
     return true;
 }
 
+bool ExchangeBitfinex::getMinAmount(const QString &pair, double &oAmount)
+{
+    if (pair.endsWith("BCHBTC")) {
+        oAmount = 0.02;
+        return true;
+    }
+    return false;
+}
+
 QString ExchangeBitfinex::getStatusMsg() const
 {
     QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
