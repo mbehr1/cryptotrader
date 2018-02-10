@@ -257,10 +257,10 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 */
             // buy:
             _exchg[iBuy]._waitForOrder = true;
-            emit tradeAdvice(_exchg[iBuy]._name, QString("%1_%2").arg(_id).arg(1), _exchg[iBuy]._book->symbol(), false, amountSellCur1, priceBuy * 1.0001); // slightly higher price for higher rel.
+            emit tradeAdvice(_exchg[iBuy]._name, _id, _exchg[iBuy]._book->symbol(), false, amountSellCur1, priceBuy * 1.0001); // slightly higher price for higher rel.
             // sell:
             _exchg[iSell]._waitForOrder = true;
-            emit tradeAdvice(_exchg[iSell]._name, QString("%1_%2").arg(_id).arg(2), _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.9999); // slightly lower price for higher rel.
+            emit tradeAdvice(_exchg[iSell]._name, _id, _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.9999); // slightly lower price for higher rel.
 
         }else{
             if (likeToSellCur1 > 0.0) // todo adjust for minAmount
@@ -303,9 +303,9 @@ void StrategyExchgDelta::onFundsUpdated(QString exchange, double amount, double 
             _exchg[i]._availCur1 += amount;
             _exchg[i]._availCur2 -= (amount * price);
             if (feeCur == _cur1)
-                _exchg[i]._availCur1 -= fee;
+                _exchg[i]._availCur1 -= fee < 0.0 ? -fee : fee ;
             else
-                _exchg[i]._availCur2 -= fee;
+                _exchg[i]._availCur2 -= fee < 0.0 ? -fee : fee;
 
             _exchg[i]._waitForOrder = false;
 
