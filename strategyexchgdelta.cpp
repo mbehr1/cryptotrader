@@ -219,7 +219,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
         double amountSellCur1 = getAvailAmount(_exchg[iSell], _cur1);
 
         // do we have to take fees into consideration? the 1% (todo const) needs to be high enough to compensate for both fees!
-        // todo assert this in constructor already
+        // yes, we do. See below (we need to buy more than we sell from cur1 otherwise the fees make it disappear)
 
         // calc amounts to sell/buy
         double likeToSellCur1 = amountSellCur1;
@@ -240,11 +240,12 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 
         if (amountSellCur1>= minAmount) {
             QString str;
+            double amountBuyCur1 = amountSellCur1 * 1.0021; // todo const. use fee
 
             str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(_cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(_cur2).arg(_exchg[iSell]._name);
             qWarning() << str << _exchg[iSell]._book->symbol();
             emit subscriberMsg(str);
-            str = QString("buy %1 %2 for %3 %4 at %5").arg(amountSellCur1).arg(_cur1).arg(amountSellCur1*priceBuy).arg(_cur2).arg(_exchg[iBuy]._name);
+            str = QString("buy %1 %2 for %3 %4 at %5").arg(amountBuyCur1).arg(_cur1).arg(amountBuyCur1*priceBuy).arg(_cur2).arg(_exchg[iBuy]._name);
             qWarning() << str << _exchg[iBuy]._book->symbol();
             emit subscriberMsg(str);
 
@@ -257,10 +258,10 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 */
             // buy:
             _exchg[iBuy]._waitForOrder = true;
-            emit tradeAdvice(_exchg[iBuy]._name, _id, _exchg[iBuy]._book->symbol(), false, amountSellCur1, priceBuy * 1.0001); // slightly higher price for higher rel.
+            emit tradeAdvice(_exchg[iBuy]._name, _id, _exchg[iBuy]._book->symbol(), false, amountBuyCur1, priceBuy * 1.001); // slightly higher price for higher rel.
             // sell:
             _exchg[iSell]._waitForOrder = true;
-            emit tradeAdvice(_exchg[iSell]._name, _id, _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.9999); // slightly lower price for higher rel.
+            emit tradeAdvice(_exchg[iSell]._name, _id, _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.999); // slightly lower price for higher rel.
 
         }else{
             if (likeToSellCur1 > 0.0) // todo adjust for minAmount
