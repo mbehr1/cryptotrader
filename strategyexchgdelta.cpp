@@ -310,6 +310,11 @@ void StrategyExchgDelta::onFundsUpdated(QString exchange, double amount, double 
 
             _exchg[i]._waitForOrder = false;
 
+            if (_exchg[i]._availCur1 < 0.0)
+                _exchg[i]._availCur1 = 0.0;
+            if (_exchg[i]._availCur2 < 0.0)
+                _exchg[i]._availCur2 = 0.0;
+
             qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 after funds update: %2 %3 / %4 %5").arg(_exchg[i]._name).arg(_exchg[i]._availCur1).arg(_cur1).arg(_exchg[i]._availCur2).arg(_cur2);
             return;
         }
