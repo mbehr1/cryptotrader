@@ -95,6 +95,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
     _lastTelegramMsgId = set.value("LastTelegramMsgId", 0).toUInt();
 
+    _noTimeoutMsgs = set.value("NoTimeoutMsgs", false).toBool();
+
     // read fundsupdatemaps
     {
         set.beginGroup("WaitForFundsUpdate");
@@ -245,6 +247,7 @@ Engine::~Engine()
     // store last telegram id:
     QSettings set("mcbehr.de", "cryptotrader_engine");
     set.setValue("LastTelegramMsgId", (double)_lastTelegramMsgId);
+    set.setValue("NoTimeoutMsgs", _noTimeoutMsgs);
     // write fundsupdatemaps
     {
         QJsonDocument doc;
@@ -367,7 +370,8 @@ void Engine::onCandlesUpdated()
 
 void Engine::onChannelTimeout(QString exchange, int channelId, bool isTimeout)
 {
-    qWarning() << __PRETTY_FUNCTION__ << exchange << channelId;
+    qWarning() << __PRETTY_FUNCTION__ << exchange << channelId << isTimeout << _noTimeoutMsgs;
+    if (_noTimeoutMsgs) return;
     if (_slowMsg.length()) _slowMsg.append("\n");
     _slowMsg.append(QString("warning! Channel %3 %1 has *%2*!")
                     .arg(channelId).arg(isTimeout ? "timeout" : "recovered").arg(exchange));
@@ -531,6 +535,11 @@ void Engine::onNewMessage(uint64_t id, Telegram::Message msg)
             for (auto &exchange : _exchanges)
                 exchange.second->reconnect();
             _telegramBot->sendMessage(msg, QString("*reconnecting*..."), true, false, msg.id);
+        }
+        else
+        if (msg.string.compare("timeout msgs")==0) {
+            _noTimeoutMsgs = !_noTimeoutMsgs;
+            _telegramBot->sendMessage(msg, QString("*timeout msgs %1*...").arg(_noTimeoutMsgs ? "disabled" : "enabled"), true, false, msg.id);
         }
         else
         if (msg.string.startsWith("#")) { // send to a single strategy

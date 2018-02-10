@@ -58,6 +58,7 @@ protected:
     std::shared_ptr<Telegram::Bot> _telegramBot;
     std::set<Telegram::ChatId> _telegramSubscribers;
     uint64_t _lastTelegramMsgId;
+    bool _noTimeoutMsgs;
     QString _slowMsg;
     QTimer _slowMsgTimer;
 };
