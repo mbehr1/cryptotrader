@@ -230,7 +230,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
         // do we have amounts?
         double minAmount = 0.0001; // todo use const for the case unknown at exchange
         // now get from exchanges:
-        double minTemp;
+        double minTemp = 0.0;
         if (_exchg[iSell]._book->exchange()->getMinAmount(_exchg[iSell]._book->symbol(), minTemp)) {
             if (minTemp > minAmount) minAmount = minTemp;
         }

@@ -76,7 +76,7 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
     return true;
 }
 
-bool ExchangeBitfinex::getMinAmount(const QString &pair, double &oAmount)
+bool ExchangeBitfinex::getMinAmount(const QString &pair, double &oAmount) const
 {
     if (pair.endsWith("BCHBTC")) {
         oAmount = 0.02;

@@ -172,8 +172,10 @@ bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, do
     return false;
 }
 
-bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount)
+bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount) const
 {
+    (void) pair;
+    (void) oAmount;
     return false; // currently we don't know
 }
 
