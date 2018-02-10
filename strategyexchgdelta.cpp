@@ -238,10 +238,10 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
             QString str;
 
             str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(_cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(_cur2).arg(_exchg[iSell]._name);
-            qWarning() << str;
+            qWarning() << str << _exchg[iSell]._book->symbol();
             emit subscriberMsg(str);
             str = QString("buy %1 %2 for %3 %4 at %5").arg(amountSellCur1).arg(_cur1).arg(amountSellCur1*priceBuy).arg(_cur2).arg(_exchg[iBuy]._name);
-            qWarning() << str;
+            qWarning() << str << _exchg[iBuy]._book->symbol();
             emit subscriberMsg(str);
 
             /*
@@ -253,10 +253,10 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 */
             // buy:
             _exchg[iBuy]._waitForOrder = true;
-            emit tradeAdvice(_exchg[iBuy]._name, QString("%1_%2").arg(_id).arg(1), _exchg[iBuy]._book->pair(), false, amountSellCur1, priceBuy * 1.0001); // slightly higher price for higher rel.
+            emit tradeAdvice(_exchg[iBuy]._name, QString("%1_%2").arg(_id).arg(1), _exchg[iBuy]._book->symbol(), false, amountSellCur1, priceBuy * 1.0001); // slightly higher price for higher rel.
             // sell:
             _exchg[iSell]._waitForOrder = true;
-            emit tradeAdvice(_exchg[iSell]._name, QString("%1_%2").arg(_id).arg(2), _exchg[iSell]._book->pair(), true, amountSellCur1, priceSell * 0.9999); // slightly lower price for higher rel.
+            emit tradeAdvice(_exchg[iSell]._name, QString("%1_%2").arg(_id).arg(2), _exchg[iSell]._book->symbol(), true, amountSellCur1, priceSell * 0.9999); // slightly lower price for higher rel.
 
         }else{
             if (likeToSellCur1 > 0.0)
