@@ -742,7 +742,8 @@ QString ExchangeBitFlyer::getStatusMsg() const
 
 int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
-    qDebug() << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden;
+    QString priceRounded = QString("%1").arg(price, 0, 'f', 5);
+    qDebug() << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden << "priceRounded=" << priceRounded;
     if (!_isConnected) {
         qWarning() << __FUNCTION__ << "not connected!";
         return -1;
@@ -757,7 +758,7 @@ int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, cons
     params.insert("product_code", symbol);
     params.insert("child_order_type", "LIMIT"); // todo parse type EXCHANGE_LIMIT to LIMIT or MARKET
     params.insert("side", amount >= 0.0 ? "BUY" : "SELL");
-    params.insert("price", price);
+    params.insert("price", priceRounded);
     params.insert("size", QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 5));
     params.insert("minute_to_expire", 60); // let's expire by default in 1h
 
