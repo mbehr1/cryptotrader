@@ -22,6 +22,7 @@ public:
     virtual void announceChannelBook(std::shared_ptr<ChannelBooks> book) = 0;
 signals:
     void tradeAdvice(QString exchange, QString id, QString tradePair, bool sell, double amount, double price); // expects a onFundsUpdated signal afterwards
+    void subscriberMsg(QString msg, bool slow=true); // to send to telegram subs
 public slots:
     virtual void onFundsUpdated(QString exchange, double amount, double price, QString pair, double fee, QString feeCur) = 0;
 protected:

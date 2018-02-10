@@ -36,6 +36,7 @@ public:
                   int hidden=0
                   ) override;
     virtual void reconnect() override;
+    virtual bool getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount = 0.0, bool makerFee=false) override;
 
 signals:
 

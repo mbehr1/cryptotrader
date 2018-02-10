@@ -60,6 +60,22 @@ void ExchangeBitfinex::reconnect()
     disconnectWS();
 }
 
+bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount, bool makerFee)
+{
+    (void) pair; // independently for now
+    (void) amount; // indep for now
+    (void) pair; // we ignore it and return same values for all
+    double feeFactor = makerFee ? 0.001 : 0.002;
+    if (buy) {
+        feeCur1 = feeFactor;
+        feeCur2 = 0.0;
+    } else {
+        feeCur1 = 0.0;
+        feeCur2 = feeFactor;
+    }
+    return true;
+}
+
 QString ExchangeBitfinex::getStatusMsg() const
 {
     QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")

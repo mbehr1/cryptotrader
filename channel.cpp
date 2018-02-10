@@ -8,7 +8,7 @@
 
 Channel::Channel(Exchange *exchange, int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed) :
     _exchange(exchange),
-    _timeoutMs(15000), _isSubscribed(subscribed), _isTimeout(false), _id(id), _channel(name), _symbol(symbol), _pair(pair)
+    _timeoutMs(60000), _isSubscribed(subscribed), _isTimeout(false), _id(id), _channel(name), _symbol(symbol), _pair(pair)
   , _lastMsg(QDateTime::currentDateTime()) // we need to fill with now otherwise first timeout is after 1s and not after defined timeout
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _channel << _symbol << _pair << _isSubscribed;
@@ -25,7 +25,7 @@ void Channel::timerEvent(QTimerEvent *event)
         if (now-last > _timeoutMs) {
             if (!_isTimeout) {
                 _isTimeout = true;
-                qWarning() << "channel (" << _id << ") seems stuck!";
+                qWarning() << "channel (" << _id << _channel << ") seems stuck!";
                 emit timeout(_id, _isTimeout);
             }
         }
@@ -264,7 +264,7 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
         qDebug() << __FUNCTION__ << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
         return true;
     } else {
-        qWarning() << __FUNCTION__ << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!";
+        qWarning() << __FUNCTION__ << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
         return false; // not possible
     }
 }

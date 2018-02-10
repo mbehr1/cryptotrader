@@ -24,6 +24,7 @@ public:
     const QString &pair() const { return _pair; }
     const QString &symbol() const { return _symbol; }
     const Exchange *exchange() const { return _exchange; }
+    const QDateTime &lastMsgTime() const { return _lastMsg; }
     int id() const { return _id; }
     void setId(int id) { _id = id; }
     void setTimeoutIntervalMs(unsigned timeoutMs) { _timeoutMs = timeoutMs; }

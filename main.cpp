@@ -1,4 +1,4 @@
-/* (c) Matthias Behr, 2017
+/* (c) Matthias Behr, 2017, 2018
  *
  * todo list:
  * - handling of heartbeat timeouts

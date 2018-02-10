@@ -227,7 +227,8 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                         }
                     else qDebug() << __PRETTY_FUNCTION__ << data;
         } else {
-            qDebug() << __PRETTY_FUNCTION__ << data;
+            qDebug() << __PRETTY_FUNCTION__ << "didn't handle: " << data;
+            // e.g. should emit orderCompleted: QJsonArray([0,"n",[1518248697804,"on-req",null,null,[null,null,1015,null,null,null,0.01,null,"EXCHANGE LIMIT",null,null,null,null,null,null,null,0.149675,null,null,null,null,null,null,0,0,null,null,null,null,null,null,null],null,"ERROR","api_key: permission invalid"]])
             if (actionValue.isArray()) {
 
             }

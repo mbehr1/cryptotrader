@@ -25,6 +25,7 @@ public:
     virtual QString getStatusMsg() const = 0;
     virtual void reconnect() = 0;
     virtual void setAuthData(const QString &api, const QString &skey);
+    virtual bool getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount = 0.0, bool makerFee=false) = 0; // fees are returned as factor, e.g. 0.002 for 0.2%
 signals:
     void exchangeStatus(QString, bool isMaintenance, bool isStopped);
     void channelDataUpdated(int channelId);
@@ -32,7 +33,7 @@ signals:
     void orderCompleted(QString, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
     void walletUpdate(QString type, QString cur, double value, double delta);
     void channelTimeout(QString, int channelId, bool isTimeout);
-    void subscriberMsg(QString msg);
+    void subscriberMsg(QString msg, bool slow=false);
 
 public slots:
 

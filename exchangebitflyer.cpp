@@ -150,6 +150,28 @@ void ExchangeBitFlyer::reconnect()
 
 }
 
+bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount, bool makerFee)
+{
+    (void) makerFee; // bitFlyer doesn't use it?
+    (void) amount; // independently of amount for now
+
+    const auto &it = _commission_rates.find(pair);
+    if (it != _commission_rates.end()) {
+        // is the fee used on first or 2nd currency?
+        if (buy) {
+            feeCur1 = 0.0;
+            feeCur2 = (*it).second;
+        } else {
+            feeCur1 = (*it).second;
+            feeCur2 = 0.0;
+        }
+        qWarning() << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning true";
+        return true;
+    }
+    qWarning() << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning false!";
+    return false;
+}
+
 void ExchangeBitFlyer::onQueryTimer()
 { // keep limit 100/min!
     triggerGetHealth();

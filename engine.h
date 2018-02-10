@@ -31,7 +31,7 @@ public slots:
     void onWalletUpdate(QString type, QString cur, double value, double delta);
     void onNewMessage(uint64_t id, Telegram::Message msg);
     void onChannelTimeout(QString exchange, int channelId, bool isTimeout);
-    void onSubscriberMsg(QString msg);
+    void onSubscriberMsg(QString msg, bool slow);
     void onSlowMsgTimer();
 protected:
     std::map<QString, std::shared_ptr<Exchange>> _exchanges;

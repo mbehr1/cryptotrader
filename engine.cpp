@@ -8,6 +8,7 @@
 #include "engine.h"
 #include "signal.h"
 #include "strategyrsinoloss.h"
+#include "strategyexchgdelta.h"
 #include "exchangebitfinex.h"
 #include "exchangebitflyer.h"
 
@@ -135,7 +136,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
         ExchangeBitfinex &_exchange = *(exchange.get());
         connect(&_exchange, SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
 
-        connect(&_exchange, SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
+        connect(&_exchange, SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
         connect(&_exchange, SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool)));
 
         connect(&_exchange, SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
@@ -173,7 +174,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
         auto exchange = std::make_shared<ExchangeBitFlyer>(key, SKey, this);
 
         connect(&(*(exchange.get())), SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
-        connect(&(*(exchange.get())), SIGNAL(subscriberMsg(QString)), this, SLOT(onSubscriberMsg(QString)));
+        connect(&(*(exchange.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
         connect(&(*(exchange.get())), SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool)));
 
         connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
@@ -199,7 +200,22 @@ Engine::Engine(QObject *parent) : QObject(parent)
             _strategies.push_front(strategy5);
         }
 
+        if(1){
+            std::shared_ptr<StrategyExchgDelta> strategy = std::make_shared<StrategyExchgDelta>(QString("#d1"), "BCHBTC",
+                                                                                              bitfinexName, bitFlyerName, this);
+            connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool))); // todo connect for other strats as well
+
+            // bitfinex channels will not be created dynamically:
+            strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel("BCH_BTC", ExchangeBitFlyer::Book)));
+            connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+            _strategies.push_front(strategy);
+        }
+
+
     }
+
+
 
     connect(&_slowMsgTimer, &QTimer::timeout, this, &Engine::onSlowMsgTimer);
     _slowMsgTimer.setSingleShot(false);
@@ -376,9 +392,13 @@ void Engine::onSlowMsgTimer()
     _slowMsg.clear();
 }
 
-void Engine::onSubscriberMsg(QString msg)
+void Engine::onSubscriberMsg(QString msg, bool slow)
 {
-    qWarning() << __PRETTY_FUNCTION__ << msg;
+    qWarning() << __PRETTY_FUNCTION__ << msg << slow;
+    if (slow) {
+        if (_slowMsg.length()) _slowMsg.append("\n");
+        _slowMsg.append(msg);
+    } else
     if (_telegramBot) {
         for (auto &s : _telegramSubscribers) {
             _telegramBot->sendMessage(s, msg);
