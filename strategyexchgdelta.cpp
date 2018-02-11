@@ -163,7 +163,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 
 
     double price1Buy, price1Sell, price2Buy, price2Sell, avg;
-    double amount = 1.0; // todo amount
+    double amount = _exchg[1]._availCur1 * 1.0021; // how much we buy depends on how much we have on the other todo factor see below
     bool ok = _exchg[0]._book->getPrices(true, amount, avg, price1Buy);
     if (!ok) return;
     amount = _exchg[0]._availCur1;
@@ -171,7 +171,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     ok = _exchg[0]._book->getPrices(false, amount, avg, price1Sell);
     if (!ok) return;
 
-    amount = 1.0; // todo amount
+    amount = _exchg[0]._availCur1 * 1.0021; ; // todo factor
     ok = _exchg[1]._book->getPrices(true, amount, avg, price2Buy);
     if (!ok) return;
 
