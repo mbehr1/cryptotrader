@@ -5,6 +5,7 @@
 #include <QJsonValueRef>
 
 #include "channel.h"
+#include "exchange.h"
 
 Channel::Channel(Exchange *exchange, int id, const QString &name, const QString &symbol, const QString &pair, bool subscribed) :
     _exchange(exchange),
@@ -12,6 +13,7 @@ Channel::Channel(Exchange *exchange, int id, const QString &name, const QString 
   , _lastMsg(QDateTime::currentDateTime()) // we need to fill with now otherwise first timeout is after 1s and not after defined timeout
 {
     qDebug() << __PRETTY_FUNCTION__ << _id << _channel << _symbol << _pair << _isSubscribed;
+    assert(_exchange);
     startTimer(1000); // each sec
 }
 
@@ -261,10 +263,10 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
     if (gotAmount >= amount) {
         avg = volume / gotAmount;
         limit = retLimit;
-        qDebug() << __FUNCTION__ << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
+        qDebug() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
         return true;
     } else {
-        qWarning() << __FUNCTION__ << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
+        qWarning() << __FUNCTION__ << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
         return false; // not possible
     }
 }
