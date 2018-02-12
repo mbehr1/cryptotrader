@@ -165,21 +165,21 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     double price1Buy, price1Sell, price2Buy, price2Sell, avg;
     double amount = _exchg[1]._availCur1 * 1.0042; // how much we buy depends on how much we have on the other todo factor see below
     if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-    bool ok = _exchg[0]._book->getPrices(true, amount, avg, price1Buy);
+    bool ok = _exchg[0]._book->getPrices(true, amount, avg, price1Buy); // ask
     if (!ok) return;
     amount = _exchg[0]._availCur1;
     if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-    ok = _exchg[0]._book->getPrices(false, amount, avg, price1Sell);
+    ok = _exchg[0]._book->getPrices(false, amount, avg, price1Sell); // Bid
     if (!ok) return;
 
     amount = _exchg[0]._availCur1 * 1.0042; ; // todo factor
     if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-    ok = _exchg[1]._book->getPrices(true, amount, avg, price2Buy);
+    ok = _exchg[1]._book->getPrices(true, amount, avg, price2Buy); // ask
     if (!ok) return;
 
     amount = _exchg[1]._availCur1;
     if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-    ok = _exchg[1]._book->getPrices(false, amount, avg, price2Sell);
+    ok = _exchg[1]._book->getPrices(false, amount, avg, price2Sell); // bid
     if (!ok) return;
 
     if (price2Buy == 0.0) { // todo sell?
@@ -188,13 +188,13 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     }
 
     // some sanity checks:
-    if (price1Buy > price1Sell) {
-        _lastStatus = QString("bid (%2) > ask (%3) on %1 for %4").arg(_exchg[0]._name).arg(price1Buy).arg(price1Sell).arg(_pair);
+    if (price1Sell > price1Buy) {
+        _lastStatus = QString("bid (%2) > ask (%3) on %1 for %4").arg(_exchg[0]._name).arg(price1Sell).arg(price1Buy).arg(_pair);
         qWarning() << __PRETTY_FUNCTION__ << _lastStatus;
         return;
     }
-    if (price2Buy > price2Sell) {
-        _lastStatus = QString("bid (%2) > ask (%3) on %1 for %4").arg(_exchg[1]._name).arg(price2Buy).arg(price2Sell).arg(_pair);
+    if (price2Sell > price2Buy) {
+        _lastStatus = QString("bid (%2) > ask (%3) on %1 for %4").arg(_exchg[1]._name).arg(price2Sell).arg(price2Buy).arg(_pair);
         qWarning() << __PRETTY_FUNCTION__ << _lastStatus;
         return;
     }
