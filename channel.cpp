@@ -266,7 +266,10 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
         qDebug() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
         return true;
     } else {
-        qWarning() << __FUNCTION__ << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
+        qWarning() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
+        for (const auto &item : ask ? _asks : _bids) {
+            qDebug() << item.second._price << item.second._count << item.second._amount;
+        }
         return false; // not possible
     }
 }
