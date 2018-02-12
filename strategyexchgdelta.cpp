@@ -163,7 +163,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 
 
     double price1Buy, price1Sell, price2Buy, price2Sell, avg;
-    double amount = _exchg[1]._availCur1 * 1.0021; // how much we buy depends on how much we have on the other todo factor see below
+    double amount = _exchg[1]._availCur1 * 1.0042; // how much we buy depends on how much we have on the other todo factor see below
     if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
     bool ok = _exchg[0]._book->getPrices(true, amount, avg, price1Buy);
     if (!ok) return;
@@ -172,7 +172,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     ok = _exchg[0]._book->getPrices(false, amount, avg, price1Sell);
     if (!ok) return;
 
-    amount = _exchg[0]._availCur1 * 1.0021; ; // todo factor
+    amount = _exchg[0]._availCur1 * 1.0042; ; // todo factor
     if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
     ok = _exchg[1]._book->getPrices(true, amount, avg, price2Buy);
     if (!ok) return;
@@ -186,6 +186,19 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
         qDebug() << __PRETTY_FUNCTION__ << "price2Buy == 0";
         return;
     }
+
+    // some sanity checks:
+    if (price1Buy > price1Sell) {
+        _lastStatus = QString("bid (%2) > ask (%3) on %1 for %4").arg(_exchg[0]._name).arg(price1Buy).arg(price1Sell).arg(_pair);
+        qWarning() << __PRETTY_FUNCTION__ << _lastStatus;
+        return;
+    }
+    if (price2Buy > price2Sell) {
+        _lastStatus = QString("bid (%2) > ask (%3) on %1 for %4").arg(_exchg[1]._name).arg(price2Buy).arg(price2Sell).arg(_pair);
+        qWarning() << __PRETTY_FUNCTION__ << _lastStatus;
+        return;
+    }
+
 
     // which price is lower?
     int iBuy, iSell;
@@ -243,7 +256,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 
         if (amountSellCur1>= minAmount) {
             QString str;
-            double amountBuyCur1 = amountSellCur1 * 1.0021; // todo const. use fee
+            double amountBuyCur1 = amountSellCur1 * 1.0042; // todo const. use 2xfee
 
             str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(_cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(_cur2).arg(_exchg[iSell]._name);
             qWarning() << str << _exchg[iSell]._book->symbol();
