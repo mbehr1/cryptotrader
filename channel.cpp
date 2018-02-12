@@ -153,7 +153,8 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
 bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 {
     if (Channel::handleDataFromBitFlyer(data)) {
-        //qDebug() << __PRETTY_FUNCTION__ << data;
+        //if (_symbol == "BCH_BTC" && data["bids"].toArray().count()>0)
+        //    qDebug() << __PRETTY_FUNCTION__ << data; // todo how to handle data after timeout? (we should remove old ones?)
 
         // process asks
         const QJsonValue &asks = data["asks"];
@@ -166,7 +167,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                     double price = o["price"].toDouble();
                     double size = o["size"].toDouble();
                     if (size>=0.0)
-                        handleSingleEntry(price, -1, -size);
+                        handleSingleEntry(price, size==0.0 ? 0 : -1, -size); // see below on why size==0.0 needs to be handled sep.
                     else
                         qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
                 } else
@@ -185,8 +186,10 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                     const auto &o = a.toObject();
                     double price = o["price"].toDouble();
                     double size = o["size"].toDouble();
+                    // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
+                    // but as handleSingleEntry does amount=0 -> ask we need to treat this differently here!
                     if (size>=0.0)
-                        handleSingleEntry(price, -1, size);
+                        handleSingleEntry(price, size==0.0 ? 0 : -1, size); // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
                     else
                         qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
                 } else
@@ -215,7 +218,7 @@ void ChannelBooks::handleSingleEntry(const double &price, const int &count, cons
     if (count==0) {
         if (it != map.end())
             map.erase(it);
-        else qWarning() << "couldn't find price to be deleted" << price << count << amount;
+        //else qWarning() << "couldn't find price to be deleted" << price << count << amount;
     } else {
         if (it != map.end()) {
             // update
