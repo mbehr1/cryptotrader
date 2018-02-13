@@ -760,7 +760,7 @@ int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, cons
     params.insert("side", amount >= 0.0 ? "BUY" : "SELL");
     params.insert("price", priceRounded);
     params.insert("size", QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 5));
-    params.insert("minute_to_expire", 60); // let's expire by default in 1h
+    params.insert("minute_to_expire", 24*60); // let's expire by default in 24h
 
     QByteArray body = QJsonDocument(params).toJson(QJsonDocument::Compact);
 
