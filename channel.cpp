@@ -152,53 +152,72 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
 
 bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 {
+    // can be: e.g. QJsonObject({"best_ask":0.13565,"best_ask_size":0.95429643,"best_bid":0.135,"best_bid_size":0.11,"ltp":0.13567,"product_code":"BCH_BTC","tick_id":682552,"timestamp":"2018-02-15T21:09:38.565998Z","total_ask_depth":483.08264031,"total_bid_depth":577.45185849,"volume":205.49892664,"volume_by_product":205.49892664})
     if (Channel::handleDataFromBitFlyer(data)) {
         //if (_symbol == "BCH_BTC" && data["bids"].toArray().count()>0)
-        //    qDebug() << __PRETTY_FUNCTION__ << data; // todo how to handle data after timeout? (we should remove old ones?)
+            //qDebug() << __PRETTY_FUNCTION__ << data; // todo how to handle data after timeout? (we should remove old ones?)
 
-        // process asks
-        const QJsonValue &asks = data["asks"];
-        if (asks.isArray()) {
-            const auto &arr = asks.toArray();
-            for (const auto &a : arr) {
-                // expect price and size
-                if (a.isObject()) {
-                    const auto &o = a.toObject();
-                    double price = o["price"].toDouble();
-                    double size = o["size"].toDouble();
-                    if (size>=0.0)
-                        handleSingleEntry(price, size==0.0 ? 0 : -1, -size); // see below on why size==0.0 needs to be handled sep.
-                    else
-                        qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
-                } else
-                    qWarning() << __PRETTY_FUNCTION__ << "a no obj" << a;
+        if (data.contains("asks")) {
+            // process asks
+            const QJsonValue &asks = data["asks"];
+            if (asks.isArray()) {
+                const auto &arr = asks.toArray();
+                for (const auto &a : arr) {
+                    // expect price and size
+                    if (a.isObject()) {
+                        const auto &o = a.toObject();
+                        double price = o["price"].toDouble();
+                        double size = o["size"].toDouble();
+                        if (size>=0.0)
+                            handleSingleEntry(price, size==0.0 ? 0 : -1, -size); // see below on why size==0.0 needs to be handled sep.
+                        else
+                            qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
+                    } else
+                        qWarning() << __PRETTY_FUNCTION__ << "a no obj" << a;
+                }
+            } else {
+                qWarning() << __PRETTY_FUNCTION__ << "can't handle asks:" << asks << data;
             }
-        } else {
-            qWarning() << __PRETTY_FUNCTION__ << "can't handle asks:" << asks << data;
         }
-        // process bids
-        const QJsonValue &bids = data["bids"];
-        if (bids.isArray()) {
-            const auto &arr = bids.toArray();
-            for (const auto &a : arr) {
-                // expect price and size
-                if (a.isObject()) {
-                    const auto &o = a.toObject();
-                    double price = o["price"].toDouble();
-                    double size = o["size"].toDouble();
-                    // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
-                    // but as handleSingleEntry does amount=0 -> ask we need to treat this differently here!
-                    if (size>=0.0)
-                        handleSingleEntry(price, size==0.0 ? 0 : -1, size); // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
-                    else
-                        qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
-                } else
-                    qWarning() << __PRETTY_FUNCTION__ << "a no obj" << a;
+        if (data.contains("bids")) {
+            // process bids
+            const QJsonValue &bids = data["bids"];
+            if (bids.isArray()) {
+                const auto &arr = bids.toArray();
+                for (const auto &a : arr) {
+                    // expect price and size
+                    if (a.isObject()) {
+                        const auto &o = a.toObject();
+                        double price = o["price"].toDouble();
+                        double size = o["size"].toDouble();
+                        // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
+                        // but as handleSingleEntry does amount=0 -> ask we need to treat this differently here!
+                        if (size>=0.0)
+                            handleSingleEntry(price, size==0.0 ? 0 : -1, size); // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
+                        else
+                            qWarning() << __PRETTY_FUNCTION__ << "invalid size" << o;
+                    } else
+                        qWarning() << __PRETTY_FUNCTION__ << "a no obj" << a;
+                }
+            } else {
+                qWarning() << __PRETTY_FUNCTION__ << "can't handle bids:" << bids << data;
             }
-        } else {
-            qWarning() << __PRETTY_FUNCTION__ << "can't handle bids:" << asks << data;
         }
         // call handleSingleEntry here. amount < 0 -> for bids, > 0 for ask, count = 0 to delete, count = 1 to update
+
+        // check for ticker based updates: this deletes complete orderbook
+        if (data.contains("tick_id")) {
+            // use best_bid / best_bid_size
+            double price = data["best_bid"].toDouble();
+            double amount = data["best_bid_size"].toDouble();
+            _bids.clear();
+            _bids.insert(std::make_pair(price, BookItem(price, 1, amount)));
+            // and best_ask / best_ask_size
+            price = data["best_ask"].toDouble();
+            amount = data["best_ask_size"].toDouble();
+            _asks.clear();
+            _asks.insert(std::make_pair(price, BookItem(price, 1, -amount)));
+        }
 
         emit dataUpdated();
         return true;

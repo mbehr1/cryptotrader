@@ -26,9 +26,10 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
 {
     qDebug() << __PRETTY_FUNCTION__ << name();
 
+    // snapshot seems to come every 240s
     _subscribedChannelNames["FX_BTC_JPY"] = "lightning_board_FX_BTC_JPY,lightning_executions_FX_BTC_JPY";
-    _subscribedChannelNames["ETH_BTC"] = "lightning_board_ETH_BTC,lightning_executions_ETH_BTC";
-    _subscribedChannelNames["BCH_BTC"] = "lightning_board_BCH_BTC,lightning_executions_BCH_BTC";
+    _subscribedChannelNames["ETH_BTC"] = "lightning_ticker_ETH_BTC,lightning_executions_ETH_BTC";
+    _subscribedChannelNames["BCH_BTC"] = "lightning_ticker_BCH_BTC,lightning_executions_BCH_BTC"; // let's try using the ticker only. so we get just the first ask/bid
 
     loadPendingOrders();
 
@@ -218,7 +219,7 @@ void ExchangeBitFlyer::onPnOutcome(pubnub_res result, const QString &pair)
         }
         auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
         if (res != PNR_STARTED) {
-            qDebug() << "subscribe res=" << res << pubnub_res_2_string(res);
+            qDebug() << pair << "subscribe res=" << res << pubnub_res_2_string(res);
             pn.second->start(500); // try again in 500ms
         }
     } else {
@@ -491,7 +492,7 @@ void ExchangeBitFlyer::updateBalances(const QString &type, const QJsonArray &arr
     if (_meBalances.isEmpty()) {
         // first time, just set it
         _meBalances = arr;
-        qDebug() << __PRETTY_FUNCTION__ << "got first set of balances=" << _meBalances;
+        qDebug() << __PRETTY_FUNCTION__ << type << "got first set of balances=" << _meBalances;
     } else {
         // check for changes:
         if (arr.isEmpty()) {
@@ -584,7 +585,7 @@ void ExchangeBitFlyer::triggerGetOrders(const QString &pair)
                                    QByteArray arr = reply->readAll();
                                    QJsonDocument d = QJsonDocument::fromJson(arr);
                                    if (d.isArray()) {
-                                    updateOrders(d.array());
+                                    updateOrders(pair, d.array());
                                    }else{
                                         qDebug() << __PRETTY_FUNCTION__ << pair << "wrong result from getorders" << arr;
                                         // we don't update orders here _meOrders = QJsonArray();
@@ -596,11 +597,11 @@ void ExchangeBitFlyer::triggerGetOrders(const QString &pair)
     }
 }
 
-void ExchangeBitFlyer::updateOrders(const QJsonArray &arr)
+void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
 {
-    if (arr == _meOrders) return;
-    qDebug() << __PRETTY_FUNCTION__ << "got orders=" << arr.size();
-    _meOrders = arr;
+    if (arr == _meOrders[pair]) return;
+    qDebug() << __PRETTY_FUNCTION__ << pair << "got orders=" << arr.size();
+    _meOrders[pair] = arr;
 
     int nrActive = 0;
     // go through list and update ours. we don't care here about deleting old ones
@@ -665,7 +666,7 @@ void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
     if (err.error == QJsonParseError::NoError) {
         if (doc.isObject()) {
             const QJsonObject &obj = doc.object();
-            if (obj.contains("mid_price")) {
+            if (obj.contains("mid_price") || obj.contains("tick_id")) {
                 auto &ch = _subscribedChannels[pair].first;
                 assert(ch);
                 if (ch) {

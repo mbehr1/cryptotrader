@@ -156,8 +156,8 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     // are both prices from within same time range?
     qint64 msecsDiff = _exchg[0]._book->lastMsgTime().msecsTo(_exchg[1]._book->lastMsgTime());
     if (msecsDiff < 0) msecsDiff = -msecsDiff;
-    if (msecsDiff > 1000) { // todo const
-        qDebug() << __PRETTY_FUNCTION__ << "book times differences too big!" << msecsDiff;
+    if (msecsDiff > 30000) { // todo const
+        qDebug() << __PRETTY_FUNCTION__ << _pair << "book times differences too big!" << msecsDiff;
         return;
     }
 

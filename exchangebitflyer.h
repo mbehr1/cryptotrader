@@ -78,7 +78,7 @@ private:
     QString _health;
     QJsonArray _mePermissions;
     std::map<QString, double> _commission_rates;
-    QJsonArray _meOrders;
+    std::map<QString, QJsonArray> _meOrders; // by pair
     std::map<QString, QJsonArray> _meBalancesMap; // by type
     std::map<QString, QJsonObject> _meOrdersMap; // child orders by child_order_acceptance_id
     std::map<QString, QDateTime> _pendingRequests;
@@ -95,7 +95,7 @@ private:
     void triggerGetExecutions();
     void processMsg(const QString &pair, const QString &msg);
     void updateBalances(const QString &type, const QJsonArray &arr);
-    void updateOrders(const QJsonArray &arr);
+    void updateOrders(const QString &pair, const QJsonArray &arr);
 
     // persistent map of pending orders:
     std::map<QString, int> _pendingOrdersMap; // child_order_acceptance_id to CID
