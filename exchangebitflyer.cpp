@@ -517,7 +517,7 @@ void ExchangeBitFlyer::updateBalances(const QString &type, const QJsonArray &arr
                             if ((hasAvailable && a["available"] != b["available"]) || a["amount"] != b["amount"]) {
                                 double delta = hasAvailable ? (b["available"].toDouble() - a["available"].toDouble()) :
                                     (b["amount"].toDouble() - a["amount"].toDouble());
-                                emit walletUpdate(QString("exchange"), b["currency_code"].toString(), bAmount, delta);
+                                emit walletUpdate(name(), QString("exchange"), b["currency_code"].toString(), bAmount, delta);
                                 qDebug() << __PRETTY_FUNCTION__ << "wallet update: " << b["currency_code"].toString() << bAmount << delta;
                             }
                             found = true;
@@ -525,7 +525,7 @@ void ExchangeBitFlyer::updateBalances(const QString &type, const QJsonArray &arr
                         }
                     }
                     if (!found) {
-                        emit walletUpdate(QString("exchange"), b["currency_code"].toString(), bAmount, bAmount);
+                        emit walletUpdate(name(), QString("exchange"), b["currency_code"].toString(), bAmount, bAmount);
                         qDebug() << __PRETTY_FUNCTION__ << "wallet update: " << b["currency_code"].toString() << bAmount;
                     }
                 } else

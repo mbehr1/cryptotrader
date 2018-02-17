@@ -84,7 +84,7 @@ protected:
 
 signals:
     void orderCompleted(int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
-    void walletUpdate(QString type, QString cur, double value, double delta);
+    void walletUpdate(QString ename, QString type, QString cur, double value, double delta);
 public slots:
     void onCheckPending();
 };

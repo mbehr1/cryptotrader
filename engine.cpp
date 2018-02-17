@@ -145,8 +145,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
                 this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
         connect(&_exchange, SIGNAL(newChannelSubscribed(std::shared_ptr<Channel>)),
                 this, SLOT(onNewChannelSubscribed(std::shared_ptr<Channel>)));
-        connect(&_exchange, SIGNAL(walletUpdate(QString,QString,double,double)),
-                this, SLOT(onWalletUpdate(QString,QString,double,double)), Qt::QueuedConnection);
+        connect(&_exchange, SIGNAL(walletUpdate(QString, QString,QString,double,double)),
+                this, SLOT(onWalletUpdate(QString, QString,QString,double,double)), Qt::QueuedConnection);
         // todo subscribe channels here only (needs connect or queue or ...)
 
         _exchange.setAuthData(bitfinexKey, bitfinexSKey);
@@ -181,8 +181,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
         connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
                 this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
-        connect(&(*(exchange.get())), SIGNAL(walletUpdate(QString,QString,double,double)),
-                this, SLOT(onWalletUpdate(QString,QString,double,double)), Qt::QueuedConnection);
+        connect(&(*(exchange.get())), SIGNAL(walletUpdate(QString, QString,QString,double,double)),
+                this, SLOT(onWalletUpdate(QString, QString,QString,double,double)), Qt::QueuedConnection);
 
         assert(_exchanges.find(exchange->name()) == _exchanges.end());
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
@@ -390,11 +390,11 @@ void Engine::onChannelTimeout(QString exchange, int channelId, bool isTimeout)
                     .arg(channelId).arg(isTimeout ? "timeout" : "recovered").arg(exchange));
 }
 
-void Engine::onWalletUpdate(QString type, QString cur, double value, double delta)
+void Engine::onWalletUpdate(QString ename, QString type, QString cur, double value, double delta)
 {
     if (_slowMsg.length()) _slowMsg.append("\n");
-    _slowMsg.append(QString("WU %1 *%2=%3* `(%4)`")
-                    .arg(type).arg(cur).arg(value).arg(delta));
+    _slowMsg.append(QString("WU %5 %1 *%2=%3* `(%4)`")
+                    .arg(type).arg(cur).arg(value).arg(delta).arg(ename));
 }
 
 void Engine::onSlowMsgTimer()

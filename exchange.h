@@ -32,7 +32,7 @@ signals:
     void channelDataUpdated(int channelId);
     void newChannelSubscribed(std::shared_ptr<Channel> channel);
     void orderCompleted(QString, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur);
-    void walletUpdate(QString type, QString cur, double value, double delta);
+    void walletUpdate(QString name, QString type, QString cur, double value, double delta);
     void channelTimeout(QString, int channelId, bool isTimeout);
     void subscriberMsg(QString msg, bool slow=false);
 

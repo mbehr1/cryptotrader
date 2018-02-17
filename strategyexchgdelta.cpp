@@ -214,7 +214,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
             priceSell = price1Sell;
         } else {
             _lastStatus = QString("prices interleave: E1 %1 %2 / E2 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell);
-            qDebug() << __PRETTY_FUNCTION__ << _lastStatus;
+            qDebug() << __PRETTY_FUNCTION__ << _pair << _lastStatus;
             return;
         }
     }

@@ -3,6 +3,7 @@
 #include <QJsonValue>
 #include <QJsonArray>
 #include "channelaccountinfo.h"
+#include "exchange.h"
 
 ChannelAccountInfo::ChannelAccountInfo(Exchange *exchange) :
     Channel(exchange, 0, "Account Info", "", "")
@@ -184,7 +185,7 @@ bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
                                     _wallet[wType][cur] = amount;
                             } else
                                 _wallet[wType][cur] = amount;
-                            emit walletUpdate(wType, cur, amount, amount-oldAmount);
+                            emit walletUpdate(_exchange ? _exchange->name() : QString(), wType, cur, amount, amount-oldAmount);
 
                             qDebug() << __PRETTY_FUNCTION__ << "wu:" << wType << cur << "=" << amount;
                         }
