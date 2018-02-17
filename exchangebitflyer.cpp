@@ -20,8 +20,7 @@ extern "C" {
 }
 
 ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObject *parent) :
-    Exchange(parent, "cryptotrader_exchangebitflyer")
-  , _nam(this)
+    ExchangeNam(parent, "cryptotrader_exchangebitflyer")
   , _nrChannels(0)
 {
     qDebug() << __PRETTY_FUNCTION__ << name();
@@ -32,9 +31,6 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
     _subscribedChannelNames["BCH_BTC"] = "lightning_ticker_BCH_BTC,lightning_executions_BCH_BTC"; // let's try using the ticker only. so we get just the first ask/bid
 
     loadPendingOrders();
-
-    connect(&_nam, SIGNAL(finished(QNetworkReply*)),
-            this, SLOT(requestFinished(QNetworkReply*)));
 
     // to be on the safe side we should:
     // 1 auth
@@ -240,45 +236,8 @@ void ExchangeBitFlyer::onTimerTimeout(const QString &pair)
     qDebug() << "subscribe " << pair << " res=" << res << "success=" << pubnub_res_2_string(res);
 }
 
-void ExchangeBitFlyer::requestFinished(QNetworkReply *reply)
+bool ExchangeBitFlyer::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)
 {
-    if (!reply)
-        qWarning() << __PRETTY_FUNCTION__ << "null reply!";
-    else {
-        // search in map
-        auto it = _pendingReplies.find(reply);
-        if (it!= _pendingReplies.end()) {
-            auto &fn = (*it).second._resultFn;
-            const QString &path = (*it).second._path;
-
-            _pendingRequests.erase(path); // delete this first to allow callbacks to retrigger
-            fn(reply);
-            _pendingReplies.erase(reply); // don't delete before as fn is being used!
-        } else {
-            qWarning() << __PRETTY_FUNCTION__ << "couldnt find reply in pendingReplies map!" << reply;
-        }
-        reply->deleteLater();
-    }
-}
-
-bool ExchangeBitFlyer::triggerApiRequest(const QString &path, bool doSign, bool doGet,
-                                         QByteArray *postData,
-                                         const std::function<void (QNetworkReply *)> &resultFn)
-{
-    if (path.length()==0) return false;
-    if (!doGet && !postData) return false;
-
-    // check whether a request is still pending
-    auto tit = _pendingRequests.find(path);
-    if (tit != _pendingRequests.cend()) {
-        // check whether it timed out?
-        // in that case we might need to call the resultFn here and delete the request
-        qWarning() << __PRETTY_FUNCTION__ << "ignoring request" << path << "as it's still pending since" << (*tit).second;
-        return false;
-    }
-
-    QNetworkRequest req;
-    QUrl url;
     QString fullUrl("https://api.bitflyer.jp");
     fullUrl.append(path);
     url.setUrl(fullUrl, QUrl::StrictMode);
@@ -289,10 +248,18 @@ bool ExchangeBitFlyer::triggerApiRequest(const QString &path, bool doSign, bool 
     if (doSign) {
         QByteArray timeStamp = QDateTime::currentDateTime().toString(Qt::ISODate).toUtf8();
         QByteArray authPayload = timeStamp;
-        if (doGet)
+        switch(reqType) {
+        case GET:
             authPayload.append("GET");
-        else
+            break;
+        case POST:
             authPayload.append("POST");
+            break;
+        default:
+            qWarning() << __PRETTY_FUNCTION__ << "unknown reqtype" << (int)reqType;
+            return false;
+            break;
+        }
         authPayload.append(path);
         if (postData)
             authPayload.append(*postData);
@@ -303,33 +270,14 @@ bool ExchangeBitFlyer::triggerApiRequest(const QString &path, bool doSign, bool 
         req.setRawHeader(QByteArray("ACCESS-SIGN"), sign);
         // todo
     }
-
-    QNetworkReply *reply=0;
-    if (doGet) {
-        assert(postData==0);
-        reply = _nam.get(req);
-    } else {
-        // post
-        assert(postData);
-        reply = _nam.post(req, *postData);
-    }
-
-    // add to processing map
-    if (reply) {
-        _pendingReplies.insert(std::make_pair(reply,
-                                              PendingReply(path, resultFn)));
-        _pendingRequests.insert(std::make_pair(path, QDateTime::currentDateTime()));
-        return true;
-    } else
-        qWarning() << __PRETTY_FUNCTION__ << "reply null!" << url;
-    return false;
+    return true;
 }
 
 void ExchangeBitFlyer::triggerGetHealth()
 {
     QByteArray path("/v1/gethealth?product_code=FX_BTC_JPY"); // todo product_code
 
-    if (!triggerApiRequest(path, false, true, 0,
+    if (!triggerApiRequest(path, false, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
@@ -365,7 +313,7 @@ void ExchangeBitFlyer::triggerAuth()
 {
     QByteArray path("/v1/me/getpermissions");
 
-    if (!triggerApiRequest(path, true, true, 0,
+    if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
@@ -397,7 +345,7 @@ void ExchangeBitFlyer::triggerCheckCommissions(const QString &pair)
     QByteArray path;
     path.append(QString("/v1/me/gettradingcommission?product_code=%1").arg(pair));
 
-    if (!triggerApiRequest(path, true, true, 0,
+    if (!triggerApiRequest(path, true, GET, 0,
                                               [this, pair](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
@@ -437,7 +385,7 @@ void ExchangeBitFlyer::triggerGetMargins()
 {
     QByteArray path("/v1/me/getcollateralaccounts");
 
-    if (!triggerApiRequest(path, true, true, 0,
+    if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
@@ -464,7 +412,7 @@ void ExchangeBitFlyer::triggerGetBalance()
 {
     QByteArray path("/v1/me/getbalance");
 
-    if (!triggerApiRequest(path, true, true, 0,
+    if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
@@ -542,7 +490,7 @@ void ExchangeBitFlyer::triggerGetExecutions()
 {
     QByteArray path("/v1/me/getexecutions");
 
-    if (!triggerApiRequest(path, true, true, 0,
+    if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
@@ -575,7 +523,7 @@ void ExchangeBitFlyer::triggerGetOrders(const QString &pair)
     // QJsonArray([{"average_price":912612,"cancel_size":0,"child_order_acceptance_id":"JRF20171124-153649-181288","child_order_date":"2017-11-24T15:36:49","child_order_id":"JOR20171124-153656-987091","child_order_state":"COMPLETED","child_order_type":"LIMIT","executed_size":0.01,"expire_date":"2017-11-24T16:36:49","id":161335008,"outstanding_size":0,"price":912000,"product_code":"BTC_JPY","side":"SELL","size":0.01,"total_commission":1.5e-05}])
     //path.append(QString("?child_order_acceptance_id=JRF20171123-233841-855193"));
 
-    if (!triggerApiRequest(path, true, true, 0,
+    if (!triggerApiRequest(path, true, GET, 0,
                                               [this, pair](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                        qCritical() << __PRETTY_FUNCTION__ << pair << reply->errorString() << reply->error() << reply->readAll();
@@ -650,7 +598,7 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
 
     // need to check whether there is any pending order that doesn't appear in orders any longer! (then we need to cancel it!)
     if (!nrActive && _pendingOrdersMap.size()) {
-        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << _pendingOrdersMap.size();
+        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << pair << _pendingOrdersMap.size();
         // todo emit signal and delete them
     }
 
@@ -767,7 +715,7 @@ int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, cons
 
     int nextCid = getNextCid();
 
-    if (!triggerApiRequest(path, true, false, &body,
+    if (!triggerApiRequest(path, true, POST, &body,
                                               [this, nextCid, symbol](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                         QByteArray arr = reply->readAll();

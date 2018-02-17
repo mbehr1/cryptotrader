@@ -11,6 +11,7 @@
 #include "strategyexchgdelta.h"
 #include "exchangebitfinex.h"
 #include "exchangebitflyer.h"
+#include "exchangebinance.h"
 
 QString queryFromStdin(const QString &query)
 {
@@ -153,6 +154,40 @@ Engine::Engine(QObject *parent) : QObject(parent)
         bitfinexSKey.fill(QChar('x'), bitfinexSKey.length()); // overwrite in memory
         assert(_exchanges.find(exchange->name()) == _exchanges.end());
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
+    }
+
+    if(1){ // create binance exchange
+        QString binanceKey = set.value("BinanceApiKey", QString("")).toString();
+        if (!binanceKey.length()) {
+            binanceKey = queryFromStdin("binance api key");
+            if (!binanceKey.length())
+                throw std::invalid_argument("binance api key missing");
+            set.setValue("BinanceApiKey", binanceKey);
+            set.sync();
+        }
+        QString binanceSKey = set.value("BinanceApiSKey", QString("")).toString();
+        if (!binanceSKey.length()) {
+            binanceSKey = queryFromStdin("binance api secret");
+            if (!binanceSKey.length())
+                throw std::invalid_argument("binance api secret missing");
+            set.setValue("BinanceApiSKey", binanceSKey);
+            set.sync();
+        }
+
+        auto exchange = std::make_shared<ExchangeBinance>(binanceKey, binanceSKey, this);
+
+        connect(&(*(exchange.get())), SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
+        connect(&(*(exchange.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
+        connect(&(*(exchange.get())), SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool)));
+
+        connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
+                this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
+        connect(&(*(exchange.get())), SIGNAL(walletUpdate(QString, QString,QString,double,double)),
+                this, SLOT(onWalletUpdate(QString, QString,QString,double,double)), Qt::QueuedConnection);
+
+        assert(_exchanges.find(exchange->name()) == _exchanges.end());
+        _exchanges.insert(std::make_pair(exchange->name(), exchange));
+
     }
 
     if(1){ // create bitFlyer exchange

@@ -6,23 +6,22 @@
 #include <QNetworkAccessManager>
 #include <QJsonArray>
 #include <QDateTime>
-#include "exchange.h"
+#include "exchangenam.h"
 #include "pubnub_api_types.h"
 #include "channel.h"
 
 static QString bitFlyerName = "bitFlyer";
 
 class pubnub_qt;
-class QNetworkReply;
 
-class ExchangeBitFlyer : public Exchange
+class ExchangeBitFlyer : public ExchangeNam
 {
     Q_OBJECT
 public:
     ExchangeBitFlyer(const QString &api, const QString &skey, QObject *parent = 0);
     ExchangeBitFlyer(const ExchangeBitFlyer &) = delete;
     virtual ~ExchangeBitFlyer();
-    const QString &name() const { return bitFlyerName; }
+    const QString &name() const override { return bitFlyerName; }
     QString getStatusMsg() const override;
 
     int newOrder(const QString &symbol,
@@ -43,7 +42,6 @@ private Q_SLOTS:
     void onQueryTimer();
     void onPnOutcome(pubnub_res result, const QString &pair);
     void onChannelTimeout(int id, bool isTimeout);
-    void requestFinished(QNetworkReply *reply);
 
 
 private:
@@ -52,27 +50,10 @@ private:
     //QTimer _timer;
     QTimer _queryTimer; // triggers cyclic checks for order status,...
     std::map<QString, std::pair<std::shared_ptr<ChannelBooks>, std::shared_ptr<Channel>>> _subscribedChannels;
-    // for normal api access via https://api.bitflyer.jp/v1/
-    QNetworkAccessManager _nam;
-
-    typedef std::function<void(QNetworkReply*)> ResultFn;
 
     bool addPair(const QString &pair);
     int _nrChannels; // nr of created channels
 
-    class PendingReply
-    {
-    public:
-        PendingReply(const QString &path,
-                     const ResultFn &fn) :
-            _path(path), _resultFn(fn) {}
-        PendingReply() = delete;
-
-        QString _path;
-        ResultFn _resultFn;
-    };
-
-    std::map<QNetworkReply*, PendingReply> _pendingReplies;
 
     // dynamic infos:
     QString _health;
@@ -81,11 +62,9 @@ private:
     std::map<QString, QJsonArray> _meOrders; // by pair
     std::map<QString, QJsonArray> _meBalancesMap; // by type
     std::map<QString, QJsonObject> _meOrdersMap; // child orders by child_order_acceptance_id
-    std::map<QString, QDateTime> _pendingRequests;
 
-    bool triggerApiRequest(const QString &path, bool doSign,
-                           bool doGet, QByteArray *postData,
-                           const std::function<void(QNetworkReply*)> &resultFn);
+    virtual bool finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData) override;
+
     void triggerGetHealth();
     void triggerAuth();
     void triggerCheckCommissions(const QString &pair);

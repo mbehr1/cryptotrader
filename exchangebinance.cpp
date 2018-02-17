@@ -1,0 +1,563 @@
+#include <cassert>
+#include <QJsonDocument>
+#include <QNetworkReply>
+#include <QMessageAuthenticationCode>
+
+#include "exchangebinance.h"
+#include "channel.h"
+/*
+ * api description here: https://github.com/binance-exchange/binance-official-api-docs/blob/master/rest-api.md
+ *
+*/
+
+ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObject *parent) :
+    ExchangeNam(parent, "cryptotrader_exchangebinance")
+  , _nrChannels(0)
+{
+    qDebug() << __PRETTY_FUNCTION__ << name();
+
+    loadPendingOrders();
+
+    addPair("BNBBTC");
+    addPair("BCCBTC");
+
+    setAuthData(api, skey);
+    triggerExchangeInfo();
+    triggerAccountInfo();
+    triggerCreateListenKey();
+
+    assert(connect(&_ws, &QWebSocket::connected, this, &ExchangeBinance::onWsConnected));
+    assert(connect(&_ws, &QWebSocket::disconnected, this, &ExchangeBinance::onWsDisconnected));
+    typedef void (QWebSocket:: *sslErrorsSignal)(const QList<QSslError> &);
+    assert(connect(&_ws, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBinance::onWsSslErrors));
+    assert(connect(&_ws, SIGNAL(textMessageReceived(QString)), this, SLOT(onWsTextMessageReceived(QString))));
+
+    assert(connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer())));
+    _queryTimer.setSingleShot(false);
+    _queryTimer.start(5000); // each 5ss
+
+    for (const auto &symbol : _subscribedChannels)
+        triggerGetOrders(symbol.first.toLower());
+}
+
+ExchangeBinance::~ExchangeBinance()
+{
+    qDebug() << __PRETTY_FUNCTION__ << name();
+    _queryTimer.stop();
+
+    disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBinance::onWsDisconnected);
+
+    storePendingOrders();
+    // todo delete listen key. DELETE /api/v1/userDataStream
+}
+
+bool ExchangeBinance::addPair(const QString &symbol)
+{
+    // check whether it's already contained?
+    if (_subscribedChannels.find(symbol) == _subscribedChannels.end()) {
+        auto chb = std::make_shared<ChannelBooks>(this, ++_nrChannels, symbol);
+        chb->setTimeoutIntervalMs(5*60000);
+        assert(connect(&(*chb), SIGNAL(timeout(int, bool)), this, SLOT(onChannelTimeout(int,bool))));
+
+        auto ch = std::make_shared<ChannelTrades>(this, ++_nrChannels, symbol, symbol);
+        ch->setTimeoutIntervalMs(5*60000);
+        assert(connect(&(*ch), SIGNAL(timeout(int, bool)), this, SLOT(onChannelTimeout(int,bool))));
+
+        _subscribedChannels[symbol] = std::make_pair(chb, ch);
+        return true;
+    } else {
+        qWarning() << __PRETTY_FUNCTION__ << "have already" << symbol;
+        return false;
+    }
+}
+
+std::shared_ptr<Channel> ExchangeBinance::getChannel(const QString &pair, CHANNELTYPE type) const
+{
+    std::shared_ptr<Channel> toRet;
+    auto it = _subscribedChannels.find(pair);
+    if (it != _subscribedChannels.cend()) {
+        toRet = type == Book ? (*it).second.first : (*it).second.second;
+    }
+    return toRet;
+}
+
+void ExchangeBinance::onQueryTimer()
+{
+    keepAliveListenKey();
+
+    checkConnectWS();
+}
+
+void ExchangeBinance::loadPendingOrders()
+{
+    // read fundsupdatemaps
+    QByteArray fuString = _settings.value("PendingOrders").toByteArray();
+    if (fuString.length()) {
+        QJsonDocument doc = QJsonDocument::fromJson(fuString);
+        if (doc.isArray()){
+            const QJsonArray &arr = doc.array();
+            for (const auto &elem : arr) {
+                if (elem.isObject()) {
+                    const QJsonObject &o = elem.toObject();
+                    QString id = o["id"].toString();
+                    int cid = o["cid"].toInt();
+                    if (cid && id.length())
+                        _pendingOrdersMap.insert(std::make_pair(id, cid));
+                }
+            }
+        }
+    }
+    qDebug() << __PRETTY_FUNCTION__ << "loaded" << _pendingOrdersMap.size() << "pending orders";
+}
+
+void ExchangeBinance::storePendingOrders()
+{
+    // write pending orders
+    QJsonDocument doc;
+    QJsonArray arr;
+    for (const auto &e1 : _pendingOrdersMap) {
+        int cid = e1.second;
+        QString id = e1.first;
+        QJsonObject o;
+        o.insert("cid", cid);
+        o.insert("id", id);
+        arr.append(o);
+    }
+    doc.setArray(arr);
+    _settings.setValue("PendingOrders", doc.toJson(QJsonDocument::Compact));
+}
+
+bool ExchangeBinance::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)
+{
+    QString fullPath = path;
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setRawHeader(QByteArray("X-MBX-APIKEY"), _apiKey.toUtf8());
+
+    if (doSign) {
+        // add signature and timestamp and recvWindow
+        QString addQuery=QString("recvWindow=%1&timestamp=%2").arg(5000).arg(QDateTime::currentMSecsSinceEpoch());
+
+        if (fullPath.contains('?')) {
+            fullPath.append('&');
+            fullPath.append(addQuery);
+        } else {
+            fullPath.append('?');
+            fullPath.append(addQuery);
+        }
+
+        QString queryPath = fullPath.split('?')[1]; // everything after first ? in fullPath
+        QByteArray totalParams = queryPath.toUtf8();
+        if (postData)
+            totalParams.append(*postData);
+        QString signature = QMessageAuthenticationCode::hash(totalParams, _sKey.toUtf8(), QCryptographicHash::Sha256).toHex();
+        fullPath.append(QString("&signature=%1").arg(signature));
+        qDebug() << __PRETTY_FUNCTION__ << "totalParams=" << totalParams << "fullPath=" << fullPath;
+    }
+    QString fullUrl("https://api.binance.com");
+    fullUrl.append(fullPath);
+    url.setUrl(fullUrl, QUrl::StrictMode);
+    req.setUrl(url);
+
+    return true;
+}
+
+void ExchangeBinance::reconnect()
+{
+    qDebug() << __PRETTY_FUNCTION__ << "todo!";
+}
+
+void ExchangeBinance::triggerAccountInfo()
+{
+    QByteArray path("/api/v3/account");
+    // QByteArray postData;
+    if (!triggerApiRequest(path, true, GET, 0,
+                           [this](QNetworkReply *reply) {
+        _isAuth = false;
+        if (reply->error() != QNetworkReply::NoError) {
+            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+                           assert(false);
+            return;
+        }
+        QByteArray arr = reply->readAll();
+        QJsonDocument d = QJsonDocument::fromJson(arr);
+        if (d.isObject()) {
+            _accountInfo = d.object();
+            _isAuth = true;
+            if (_accountInfo.contains("balances"))
+              updateBalances(_accountInfo["balances"].toArray());
+            qDebug() << __PRETTY_FUNCTION__ << "got account into. canTrade=" << _accountInfo["canTrade"].toBool();
+        } else
+          qDebug() << __PRETTY_FUNCTION__ << d;
+
+    })){
+        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+    }
+}
+
+void ExchangeBinance::updateBalances(const QJsonArray &arr)
+{ // array with asset, free, locked
+    if (_meBalances.isEmpty()) {
+        // first time, just set it:
+        _meBalances = arr;
+        qDebug() << __PRETTY_FUNCTION__ << "got first set of balances=" << _meBalances.count(); // <<  _meBalances;
+        for (const auto &bal : _meBalances) {
+            if (bal.isObject()) {
+                const auto &b = bal.toObject();
+                //qDebug() << "b=" << b << b["free"] << b["locked"] << b["asset"];
+                if (b["free"].toString().toDouble() != 0.0 || b["locked"].toString().toDouble() != 0.0)
+                    qDebug() << " " << b["asset"].toString() << b["free"].toString() << b["locked"].toString();
+            } else qDebug() << bal;
+        }
+    } else {
+        if (arr.isEmpty()) {
+            // go through each _meBalances and emit walletUpdate...
+            // todo
+            _meBalances = arr;
+            qDebug() << __PRETTY_FUNCTION__ << "cleared balances. todo!";
+        } else {
+            // compare each:
+            for (const auto &bo : arr) {
+                const QJsonObject &b = bo.toObject();
+                if (b.contains("asset")) {
+                    QString asset = b["asset"].toString();
+                    double bFree = b["free"].toString().toDouble();
+                    double bLocked = b["locked"].toString().toDouble();
+                    // search this currency:
+                    // this has O(n2) but doesn't matter as it's still quite small...
+                    bool found = false;
+                    for (const auto &ao : _meBalances) {
+                        const QJsonObject &a = ao.toObject();
+                        if (a["asset"] == asset) {
+                            double aFree = a["free"].toString().toDouble();
+                            double aLocked = a["locked"].toString().toDouble();
+                            if (aFree != bFree) {
+                                double delta = bFree - aFree;
+                                emit walletUpdate(name(), "free", asset, bFree, delta);
+                                qDebug() << __PRETTY_FUNCTION__ << "wallet update: free " << asset << bFree << delta;
+                            }
+                            if (aLocked != bLocked) {
+                                double delta = bLocked - aLocked;
+                                emit walletUpdate(name(), "locked", asset, bLocked, delta);
+                                qDebug() << __PRETTY_FUNCTION__ << "wallet update: locked " << asset << bLocked << delta;
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        if (bFree) {
+                            emit walletUpdate(name(), "free", asset, bFree, bFree);
+                            qDebug() << __PRETTY_FUNCTION__ << "wallet update: free " << asset << bFree;
+                        }
+                        if (bLocked) {
+                            emit walletUpdate(name(), "locked", asset, bLocked, bLocked);
+                            qDebug() << __PRETTY_FUNCTION__ << "wallet update: locked " << asset << bLocked;
+                        }
+                    }
+
+                } else
+                    qWarning() << __PRETTY_FUNCTION__ << "wrong data! missing asset" << b;
+            }
+            // 2nd check for removed ones. (and send 0 update) todo
+            _meBalances = arr;
+        }
+    }
+}
+
+void ExchangeBinance::triggerGetOrders(const QString &symbol)
+{
+    QByteArray path("/api/v3/allOrders"); // w5 openOrders"); // weights 1 with given symbol, number of symbols that are trading / 2 otherwise!
+    assert(symbol.length()); // we need a symbol
+    path.append(QString("?symbol=%1").arg(symbol));
+    if (!triggerApiRequest(path, true, GET, 0,
+                           [this, symbol](QNetworkReply *reply) {
+        if (reply->error() != QNetworkReply::NoError) {
+            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+            return;
+        }
+        QByteArray arr = reply->readAll();
+        QJsonDocument d = QJsonDocument::fromJson(arr);
+        // qDebug() << __PRETTY_FUNCTION__ << d;
+        if (d.isArray()) {
+            updateOrders(symbol, d.array());
+        } else
+          qWarning() << __PRETTY_FUNCTION__ << "can't handle" << d;
+
+    })){
+        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+    }
+}
+
+void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
+{
+    if (arr == _meOrders[symbol]) return;
+    // qDebug() << __PRETTY_FUNCTION__ << symbol << arr;
+    _meOrders[symbol] = arr;
+
+    int nrActive = 0;
+
+    for (const auto &ao : arr) {
+        if (ao.isObject()) {
+            const QJsonObject &o = ao.toObject();
+            QString id = QString("%1").arg((int64_t)o["orderId"].toDouble());
+            if (id.length()) {
+                auto it = _meOrdersMap.find(id);
+                if (it != _meOrdersMap.end()) {
+                    (*it).second = o; // update always?
+                } else {
+                    // new one
+                    it = _meOrdersMap.insert(std::make_pair(id, o)).first;
+                }
+
+                QString status = (*it).second["status"].toString(); // NEW PARTIALLY_FILLED FILLED CANCELED PENDING_CANCEL (currently unused) REJECTED EXPIRED
+
+                bool active = status == "NEW" || status == "PARTIALLY_FILLED"; // other stati?
+                if (!active) {
+                    // qDebug() << __PRETTY_FUNCTION__ << "got inactive order=" << id << status << o;
+                    // check for pending orders:
+                    auto pit = _pendingOrdersMap.find(id);
+                    if (pit != _pendingOrdersMap.end()) {
+                        int cid = (*pit).second;
+                        qDebug() << __PRETTY_FUNCTION__ << "found pending order. cid=" << cid << id;
+                        bool isSell = o["side"].toString() == "SELL";
+                        double amount = o["executedQty"].toString().toDouble();
+                        if (isSell && amount >= 0.0) amount = -amount;
+                        double price = o["price"].toString().toDouble();
+                        double fee = 0.0; // todo
+                        QString feeCur; // todo
+                        qDebug() << __PRETTY_FUNCTION__ << "found pending order" << cid << amount << price << status << symbol << fee << feeCur;
+                        emit orderCompleted(name(), cid, amount, price, status, symbol, fee, feeCur);
+                        _pendingOrdersMap.erase(pit);
+                        storePendingOrders();
+                    }
+                } else {
+                    ++nrActive;
+                    qDebug() << __PRETTY_FUNCTION__ << "got active order=" << o << arr.size();
+                }
+
+            } else {
+                qWarning() << __PRETTY_FUNCTION__ << "empty orderId" << o;
+            }
+        } else {
+            qWarning() << __PRETTY_FUNCTION__ << "expected obj got " << ao;
+        }
+    }
+
+    if (!nrActive && _pendingOrdersMap.size()) {
+        // todo need to check which of the pending orders are from proper symbol!
+        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << symbol << _pendingOrdersMap;
+    }
+}
+
+void ExchangeBinance::triggerCreateListenKey()
+{
+    QByteArray path("/api/v1/userDataStream");
+    QByteArray postData;
+    if (!triggerApiRequest(path, false, POST, &postData,
+                           [this](QNetworkReply *reply) {
+        if (reply->error() != QNetworkReply::NoError) {
+            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+                           assert(false);
+            return;
+        }
+        QByteArray arr = reply->readAll();
+        QJsonDocument d = QJsonDocument::fromJson(arr);
+        if (d.isObject()) {
+            _listenKey = d.object()["listenKey"].toString();
+            _listenKeyCreated = QDateTime::currentDateTime();
+            qDebug() << __PRETTY_FUNCTION__ << "got a listenKey. len=" << _listenKey.length();
+        } else
+          qDebug() << __PRETTY_FUNCTION__ << d;
+
+    })){
+        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+    }
+}
+
+void ExchangeBinance::keepAliveListenKey()
+{
+    //qDebug() << __PRETTY_FUNCTION__;
+    // check whether we have a listen key at all:
+    if (_listenKey.length()==0) {
+        triggerCreateListenKey();
+        return;
+    }
+
+    // we have one, does it need to be kept alive? (each 30mins)
+    qint64 timeoutMs = 30 *60 *1000; // 30min in ms
+    if (QDateTime::currentMSecsSinceEpoch() - _listenKeyCreated.toMSecsSinceEpoch() > timeoutMs ) {
+        qDebug() << __PRETTY_FUNCTION__ << "need to trigger keep alive for listenKey";
+        QByteArray path("/api/v1/userDataStream");
+        QByteArray postData = QString("listenKey=%1").arg(_listenKey).toUtf8();
+        if (!triggerApiRequest(path, false, PUT, &postData,
+                               [this](QNetworkReply *reply) {
+            if (reply->error() != QNetworkReply::NoError) {
+                qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+                return;
+            }
+            _listenKeyCreated = QDateTime::currentDateTime();
+
+        })){
+            qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        }
+    }
+}
+
+void ExchangeBinance::triggerExchangeInfo()
+{
+    QByteArray path("/api/v1/exchangeInfo");
+    if (!triggerApiRequest(path, false, GET, 0,
+                           [this](QNetworkReply *reply) {
+        if (reply->error() != QNetworkReply::NoError) {
+            qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+            return;
+        }
+        QByteArray arr = reply->readAll();
+        QJsonDocument d = QJsonDocument::fromJson(arr);
+        if (d.isObject()) {
+            _exchangeInfo = d.object();
+            qDebug() << __PRETTY_FUNCTION__ << _exchangeInfo["serverTime"];
+            printSymbols();
+        }
+        qDebug() << __PRETTY_FUNCTION__ << d;
+
+    })){
+        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+    }
+}
+
+void ExchangeBinance::printSymbols() const
+{ //QJsonValue(object, QJsonObject({"baseAsset":"ETH","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000100","tickSize":"0.00000100"},{"filterType":"LOT_SIZE","maxQty":"100000.00000000","minQty":"0.00100000","stepSize":"0.00100000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.00100000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"BTC","quotePrecision":8,"status":"TRADING","symbol":"ETHBTC"}))
+
+    if (_exchangeInfo.contains("symbols")){
+        auto arr = _exchangeInfo["symbols"].toArray();
+        qDebug() << __PRETTY_FUNCTION__;
+        for (const auto &el : arr) {
+            if (el.isObject()) {
+                const auto &s = el.toObject();
+                qDebug() << " " << s["symbol"].toString() << s["baseAsset"].toString() << s["quoteAsset"].toString() << s["status"].toString() << s;
+            } else {
+                qWarning() << __PRETTY_FUNCTION__ << "no obj:" << el;
+            }
+        }
+    }
+}
+
+/*
+ * websocket handling
+ * */
+
+void ExchangeBinance::checkConnectWS()
+{
+    // do we have a valid listenKey?
+    if (_listenKey.length()) {
+        // are we connected?
+        if (!_isConnected) {
+            qDebug() << __PRETTY_FUNCTION__ << "connecting to wss";
+            QString streams;
+            streams.append(_listenKey);
+            for (const auto &symb : _subscribedChannels) {
+                streams.append(QString("/%1@depth20").arg(symb.first.toLower()));
+            }
+            //QString url = QString("wss://stream.binance.com:9443/ws/%1").arg(_listenKey);
+            QString url = QString("wss://stream.binance.com:9443/stream?streams=%1").arg(streams);
+            _ws.open(QUrl(url));
+        }
+    }
+}
+
+void ExchangeBinance::onWsSslErrors(const QList<QSslError> &errors)
+{
+    qDebug() << __PRETTY_FUNCTION__;
+    for (const auto &err : errors) {
+        qDebug() << " " << err.errorString() << err.error();
+    }
+}
+
+void ExchangeBinance::disconnectWS()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (!_isConnected) return;
+    _ws.close();
+}
+
+void ExchangeBinance::onWsConnected()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) return;
+    _isConnected = true;
+}
+
+void ExchangeBinance::onWsDisconnected()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) {
+        _isConnected = false;
+    }
+}
+
+void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
+{
+//    qDebug() << __PRETTY_FUNCTION__ << msg;
+    QJsonParseError err;
+    QJsonDocument d = QJsonDocument::fromJson(msg.toUtf8(), &err);
+    if (d.isNull() || err.error != QJsonParseError::NoError) {
+        qWarning() << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error;
+    }
+    if (d.isObject()) {
+        QString stream = d.object()["stream"].toString();
+        const QJsonObject &data = d.object()["data"].toObject();
+        // qDebug() << __PRETTY_FUNCTION__ << stream << data;
+        // channel data?
+        if (stream.contains("@depth")) {
+            bool complete = !stream.endsWith("@depth");
+            QString symbol = stream.split('@')[0];
+            // feed channel data. complete=true -> overwrite, complete=false -> partial updates
+            auto it = _subscribedChannels.find(symbol.toUpper());
+            if (it != _subscribedChannels.end()) {
+                auto &ch = (*it).second.first; // first = channelBooks
+                if (ch)
+                    ch->handleDataFromBinance(data, complete);
+            } else {
+                qWarning() << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
+            }
+        }
+    }
+}
+
+bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount, bool makerFee)
+{
+    (void)buy;
+    (void)pair,
+    (void)feeCur1;
+    (void)feeCur2;
+    (void)amount;
+    (void)makerFee;
+    return false; // todo
+}
+
+bool ExchangeBinance::getMinAmount(const QString &pair, double &amount) const
+{
+    (void) pair;
+    (void)amount;
+    return false; // todo
+}
+
+void ExchangeBinance::onChannelTimeout(int id, bool isTimeout)
+{
+    qWarning() << __PRETTY_FUNCTION__ << id << isTimeout;
+    emit channelTimeout(name(), id, isTimeout);
+}
+
+QString ExchangeBinance::getStatusMsg() const
+{
+    QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
+            .arg(_isAuth ? "AU" : "not authenticated!").arg(name());
+
+    return toRet;
+}
+
+int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
+{
+    return -1; // todo
+}

@@ -18,10 +18,14 @@ INCLUDEPATH += $$PWD/lib/PubNubQtSync/c-core/core
 DEPENDPATH += $$PWD/lib/PubNubQtSync/c-core/core
 HEADERS += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.h \
     tradestrategy.h \
-    strategyexchgdelta.h
+    strategyexchgdelta.h \
+    exchangebinance.h \
+    exchangenam.h
 SOURCES += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.cpp $$PWD/lib/PubNubQtSync/c-core/core/pubnub_ccore.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_assert_std.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_json_parse.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_helper.c \
     tradestrategy.cpp \
-    strategyexchgdelta.cpp
+    strategyexchgdelta.cpp \
+    exchangenam.cpp \
+    exchangebinance.cpp
 
 
 SOURCES += main.cpp \

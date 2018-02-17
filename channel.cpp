@@ -81,6 +81,19 @@ bool Channel::handleDataFromBitFlyer(const QJsonObject &data)
     return true;
 }
 
+bool Channel::handleDataFromBinance(const QJsonObject &data, bool complete)
+{
+    (void)data;
+    (void)complete;
+    _lastMsg = QDateTime::currentDateTime();
+    if (_isTimeout) {
+        _isTimeout = false;
+        qWarning() << "channel (" << _id << ") seems back!";
+        emit timeout(_id, _isTimeout);
+    }
+    return true;
+}
+
 bool greater(const double &a, const double &b)
 {
     return a>b;
@@ -224,6 +237,39 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
     } else return false;
 }
 
+bool ChannelBooks::handleDataFromBinance(const QJsonObject &data, bool complete)
+{ // {\"lastUpdateId\":36872610,\"bids\":[[\"0.00107080\",\"0.01000000\",[]],[\"0.00106950\",\"131.00000000\",[]],[\"0.00106940\",\"20.00000000\",[]],[\"0.00106920\",\"18.89000000\",[]],[\"0.00106900\",\"1292.43000000\",[]],[\"0.00106890\",\"2.74000000\",[]],[\"0.00106880\",\"238.07000000\",[]],[\"0.00106850\",\"73.41000000\",[]],[\"0.00106840\",\"24.92000000\",[]],[\"0.00106830\",\"181.57000000\",[]],[\"0.00106820\",\"23.34000000\",[]],[\"0.00106810\",\"118.57000000\",[]],[\"0.00106800\",\"144.15000000\",[]],[\"0.00106790\",\"1.00000000\",[]],[\"0.00106770\",\"147.49000000\",[]],[\"0.00106760\",\"2.00000000\",[]],[\"0.00106750\",\"15.70000000\",[]],[\"0.00106740\",\"103.11000000\",[]],[\"0.00106730\",\"145.65000000\",[]],[\"0.00106720\",\"23.45000000\",[]]],\"asks\":[[\"0.00107090\",\"909.71000000\",[]],[\"0.00107150\",\"10.56000000\",[]],[\"0.00107160\",\"8.56000000\",[]],[\"0.00107190\",\"195.84000000\",[]],[\"0.00107200\",\"27.37000000\",[]],[\"0.00107210\",\"164.16000000\",[]],[\"0.00107220\",\"53.49000000\",[]],[\"0.00107240\",\"187.91000000\",[]],[\"0.00107250\",\"29.48000000\",[]],[\"0.00107270\",\"82.04000000\",[]],[\"0.00107310\",\"39.50000000\",[]],[\"0.00107370\",\"20.00000000\",[]],[\"0.00107390\",\"9.02000000\",[]],[\"0.00107400\",\"22.68000000\",[]],[\"0.00107410\",\"3.89000000\",[]],[\"0.00107420\",\"5.68000000\",[]],[\"0.00107440\",\"2.53000000\",[]],[\"0.00107450\",\"5.40000000\",[]],[\"0.00107460\",\"6.47000000\",[]],[\"0.00107470\",\"221.99000000\",[]]]}
+    if (Channel::handleDataFromBinance(data, complete)) {
+        // qDebug() << __PRETTY_FUNCTION__ << _symbol << "lastUpdateId=" << (int64_t)data["lastUpdateId"].toDouble() << data["bids"].toArray().size() << data["asks"].toArray().size();
+        if (complete) {
+            _bids.clear();
+            for (const auto &b : data["bids"].toArray()) {
+                if (b.isArray()) {
+                    const QJsonArray &ba = b.toArray();
+                    double price = ba[0].toString().toDouble();
+                    double quantity = ba[1].toString().toDouble();
+                    _bids.insert(std::make_pair(price, BookItem(price, 1, quantity)));
+                } else qWarning() << __PRETTY_FUNCTION__ << "expect array" << b;
+            }
+
+            _asks.clear();
+            for (const auto &a : data["asks"].toArray()) {
+                if (a.isArray()) {
+                    const QJsonArray &ba = a.toArray();
+                    double price = ba[0].toString().toDouble();
+                    double quantity = ba[1].toString().toDouble();
+                    _asks.insert(std::make_pair(price, BookItem(price, 1, -quantity)));
+                } else qWarning() << __PRETTY_FUNCTION__ << "expect array" << a;
+            }
+            //printAsksBids();
+            emit dataUpdated();
+        } else {
+            assert(false); // not yet impl would need to check lastUpdateId being consecutive... or reset if not
+        }
+        return true;
+    } else return false;
+}
+
 void ChannelBooks::handleSingleEntry(const double &price, const int &count, const double &amount)
 { // count == -1 -> set value abs and don't add rel.
     bool isFunding = _symbol.startsWith("f"); // todo cache this?
@@ -305,11 +351,11 @@ void ChannelBooks::printAsksBids() const
         ++i;
         if (i>10)break;
     }
-    /*
+
     qDebug() << "bids:";
     for (const auto &item : _bids) {
         qDebug() << item.second._price << item.second._count << item.second._amount;
-    }*/
+    }
 
 }
 
