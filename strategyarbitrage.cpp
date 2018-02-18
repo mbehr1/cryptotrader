@@ -314,8 +314,13 @@ void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double p
         e._availCur2 -= (amount * price);
         if (feeCur == e._cur2)
             e._availCur2 -= fee < 0.0 ? -fee : fee;
-        else // we default to cur1 if empty
-            e._availCur1 -= fee < 0.0 ? -fee : fee;
+        else {
+            if (feeCur == e._cur1 || feeCur.length()==0)// we default to cur1 if empty
+                e._availCur1 -= fee < 0.0 ? -fee : fee;
+            else {
+                qWarning() << __PRETTY_FUNCTION__ << _id << QString("ignoring fee %1 %2 due to different cur.").arg(fee).arg(feeCur);
+            }
+        }
         e._waitForOrder = false;
 
         if (e._availCur1 < 0.0) e._availCur1 = 0.0;

@@ -196,7 +196,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
         if(1) {
             std::shared_ptr<StrategyRSINoLoss> strategy5 =
-                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#b1"), "BNBBTC", 100.0, 31, 59, _providerCandlesMap[mapName(exchange.get(), "BNBBTC")], this, false, 1.002);
+                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#b1"), "BNBBTC", 0.01, 31, 59, _providerCandlesMap[mapName(exchange.get(), "BNBBTC")], this, false, 1.002);
             strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel("BNBBTC", ExchangeBinance::Book)));
             connect(&(*strategy5), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
                     this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
