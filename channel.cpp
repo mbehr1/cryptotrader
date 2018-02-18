@@ -455,6 +455,27 @@ bool ChannelTrades::handleDataFromBitFlyer(const QJsonObject &data)
     } else return false;
 }
 
+bool ChannelTrades::handleDataFromBinance(const QJsonObject &data, bool complete)
+{
+    if (Channel::handleDataFromBinance(data, complete)) {
+        if (complete) _trades.clear();
+
+        //qDebug() << __PRETTY_FUNCTION__ << complete << data; // QJsonObject({"E":1518903528448,"M":true,"T":1518903528445,"a":24828428,"b":24828335,"e":"trade","m":true,"p":"0.00107340","q":"18.60000000","s":"BNBBTC","t":9578246})
+
+        if (data["e"].toString()!="trade") {
+            qWarning() << __PRETTY_FUNCTION__ << "unknown event:" << data;
+            return false;
+        }
+        int id = data["t"].toInt();
+        double price = data["p"].toString().toDouble();
+        double amount = data["q"].toString().toDouble();
+        long long mts = data["E"].toDouble();
+        handleSingleEntry(id, mts, amount, price);
+        emit dataUpdated();
+        return true;
+    } else return false;
+}
+
 void ChannelTrades::handleSingleEntry(const int &id, const long long &mts, const double &amount, const double &price)
 {
     // search whether id exists already

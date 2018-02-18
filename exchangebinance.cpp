@@ -37,7 +37,7 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
     _queryTimer.start(5000); // each 5ss
 
     for (const auto &symbol : _subscribedChannels)
-        triggerGetOrders(symbol.first.toLower());
+        triggerGetOrders(symbol.first);
 }
 
 ExchangeBinance::~ExchangeBinance()
@@ -84,8 +84,14 @@ std::shared_ptr<Channel> ExchangeBinance::getChannel(const QString &pair, CHANNE
 void ExchangeBinance::onQueryTimer()
 {
     keepAliveListenKey();
-
     checkConnectWS();
+    triggerAccountInfo(); // update balances. todo until we find out why ws is not working
+
+    for (const auto &symbol : _subscribedChannels) {
+        triggerGetMyTrades(symbol.first); // expensive w5
+        triggerGetOrders(symbol.first);
+    }
+
 }
 
 void ExchangeBinance::loadPendingOrders()
@@ -129,6 +135,7 @@ void ExchangeBinance::storePendingOrders()
 
 bool ExchangeBinance::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)
 {
+    (void)reqType;
     QString fullPath = path;
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader(QByteArray("X-MBX-APIKEY"), _apiKey.toUtf8());
@@ -151,7 +158,7 @@ bool ExchangeBinance::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doS
             totalParams.append(*postData);
         QString signature = QMessageAuthenticationCode::hash(totalParams, _sKey.toUtf8(), QCryptographicHash::Sha256).toHex();
         fullPath.append(QString("&signature=%1").arg(signature));
-        qDebug() << __PRETTY_FUNCTION__ << "totalParams=" << totalParams << "fullPath=" << fullPath;
+        // qDebug() << __PRETTY_FUNCTION__ << "totalParams=" << totalParams << "fullPath=" << fullPath;
     }
     QString fullUrl("https://api.binance.com");
     fullUrl.append(fullPath);
@@ -185,7 +192,8 @@ void ExchangeBinance::triggerAccountInfo()
             _isAuth = true;
             if (_accountInfo.contains("balances"))
               updateBalances(_accountInfo["balances"].toArray());
-            qDebug() << __PRETTY_FUNCTION__ << "got account into. canTrade=" << _accountInfo["canTrade"].toBool();
+            if (!_accountInfo["canTrade"].toBool())
+                qDebug() << __PRETTY_FUNCTION__ << "got account into. canTrade=" << _accountInfo["canTrade"].toBool();
         } else
           qDebug() << __PRETTY_FUNCTION__ << d;
 
@@ -318,17 +326,25 @@ void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
                     auto pit = _pendingOrdersMap.find(id);
                     if (pit != _pendingOrdersMap.end()) {
                         int cid = (*pit).second;
-                        qDebug() << __PRETTY_FUNCTION__ << "found pending order. cid=" << cid << id;
-                        bool isSell = o["side"].toString() == "SELL";
-                        double amount = o["executedQty"].toString().toDouble();
-                        if (isSell && amount >= 0.0) amount = -amount;
-                        double price = o["price"].toString().toDouble();
-                        double fee = 0.0; // todo
-                        QString feeCur; // todo
-                        qDebug() << __PRETTY_FUNCTION__ << "found pending order" << cid << amount << price << status << symbol << fee << feeCur;
-                        emit orderCompleted(name(), cid, amount, price, status, symbol, fee, feeCur);
-                        _pendingOrdersMap.erase(pit);
-                        storePendingOrders();
+                        qDebug() << __PRETTY_FUNCTION__ << "found pending order. cid=" << cid << id << o;
+                        // do we got the commission (fee) data yet (coming from trades only)
+                        double fee = 0.0;
+                        QString feeCur;
+                        if (getCommissionForOrderId(symbol, id, fee, feeCur)) {
+                            bool isSell = o["side"].toString() == "SELL";
+                            double amount = o["executedQty"].toString().toDouble();
+                            if (isSell && amount >= 0.0) amount = -amount;
+                            double price = o["price"].toString().toDouble();
+                            qDebug() << __PRETTY_FUNCTION__ << "found pending order" << cid << amount << price << status << symbol << fee << feeCur;
+                            emit orderCompleted(name(), cid, amount, price, status, symbol, fee, feeCur);
+                            _pendingOrdersMap.erase(pit);
+                            storePendingOrders();
+                        } else {
+                            // need to clear cache as otherwise it will be optimized and not checked next time
+                            _meOrders[symbol] = QJsonArray();
+                            // we keep it open for now:
+                            qWarning() << __PRETTY_FUNCTION__ << "got no fee data for not active order. keeping it pending." << cid << id << o;
+                        }
                     }
                 } else {
                     ++nrActive;
@@ -347,6 +363,70 @@ void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
         // todo need to check which of the pending orders are from proper symbol!
         qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << symbol << _pendingOrdersMap;
     }
+}
+
+void ExchangeBinance::triggerGetMyTrades(const QString &symbol)
+{
+    QByteArray path("/api/v3/myTrades"); // w5 (! expensivve)
+    assert(symbol.length()); // we need a symbol
+    path.append(QString("?symbol=%1").arg(symbol));
+    if (!triggerApiRequest(path, true, GET, 0,
+                           [this, symbol](QNetworkReply *reply) {
+        if (reply->error() != QNetworkReply::NoError) {
+            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+            return;
+        }
+        QByteArray arr = reply->readAll();
+        QJsonDocument d = QJsonDocument::fromJson(arr);
+        //qDebug() << __PRETTY_FUNCTION__ << d;
+        if (d.isArray()) {
+            updateTrades(symbol, d.array());
+        } else
+          qWarning() << __PRETTY_FUNCTION__ << "can't handle" << d;
+    })){
+        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+    }
+}
+
+void ExchangeBinance::updateTrades(const QString &symbol, const QJsonArray &arr)
+{
+    if (arr == _meTradesCache[symbol]) return;
+    qDebug() << __PRETTY_FUNCTION__ << symbol << arr;
+    _meTradesCache[symbol] = arr;
+
+    auto &map = _meTradesMapMap[symbol];
+    for (const auto &a : arr) {
+        if (a.isObject()) {
+            const auto &o = a.toObject();
+            if (o.contains("orderId")) {
+                QString orderId = QString("%1").arg((int64_t)o["orderId"].toDouble());
+                map[orderId] = o; // we could check first whether there is any difference?
+            } else
+                qWarning() << __PRETTY_FUNCTION__ << "missing orderId:" << o;
+        } else
+            qWarning() << __PRETTY_FUNCTION__ << "can't handle: " << a;
+    }
+}
+
+bool ExchangeBinance::getCommissionForOrderId(const QString &symbol, const QString &orderId, double &fee, QString &feeCur) const
+{
+    const auto &mit = _meTradesMapMap.find(symbol);
+    if (mit != _meTradesMapMap.cend()) {
+        const auto &it = (*mit).second.find(orderId);
+        if (it != (*mit).second.cend()) {
+            // got the trade
+            const QJsonObject &o = (*it).second;
+            if (o.contains("commission")) {
+                fee = o["commission"].toString().toDouble();
+                if (fee >= 0.0) fee = -fee; // we want fee to be neg.
+                if (o.contains("commissionAsset")) {
+                    feeCur = o["commissionAsset"].toString();
+                }
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void ExchangeBinance::triggerCreateListenKey()
@@ -417,6 +497,7 @@ void ExchangeBinance::triggerExchangeInfo()
         if (d.isObject()) {
             _exchangeInfo = d.object();
             qDebug() << __PRETTY_FUNCTION__ << _exchangeInfo["serverTime"];
+                           // todo we could check here for subscribed pairs!
             printSymbols();
         }
         qDebug() << __PRETTY_FUNCTION__ << d;
@@ -457,7 +538,8 @@ void ExchangeBinance::checkConnectWS()
             QString streams;
             streams.append(_listenKey);
             for (const auto &symb : _subscribedChannels) {
-                streams.append(QString("/%1@depth20").arg(symb.first.toLower()));
+                streams.append(QString("/%1@depth20").arg(symb.first.toLower())); // for book updates
+                streams.append(QString("/%1@trade").arg(symb.first.toLower())); // for trade updates
             }
             //QString url = QString("wss://stream.binance.com:9443/ws/%1").arg(_listenKey);
             QString url = QString("wss://stream.binance.com:9443/stream?streams=%1").arg(streams);
@@ -521,7 +603,19 @@ void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
             } else {
                 qWarning() << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
             }
-        }
+        } else
+            if (stream.contains("@trade")) {
+                QString symbol = stream.split('@')[0];
+                // feed channel data. complete=true -> overwrite, complete=false -> partial updates
+                auto it = _subscribedChannels.find(symbol.toUpper());
+                if (it != _subscribedChannels.end()) {
+                    auto &ch = (*it).second.second; // second = channel trade
+                    if (ch)
+                        ch->handleDataFromBinance(data, false);
+                } else {
+                    qWarning() << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
+                }
+            }
     }
 }
 
@@ -559,5 +653,47 @@ QString ExchangeBinance::getStatusMsg() const
 
 int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
-    return -1; // todo
+    QByteArray path("/api/v3/order");
+    QByteArray postData;
+
+    QString priceRounded = QString("%1").arg(price, 0, 'f', 5); // todo get 5 from symbol info!
+    QString quantityRounded = QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 5); // todo get 5 from symbol info!
+
+    postData.append(QString("symbol=%1").arg(symbol));
+    postData.append(QString("&side=%1").arg(amount >= 0.0 ? "BUY" : "SELL"));
+    (void)type; (void)hidden;
+    postData.append(QString("&type=%1").arg("LIMIT")); // todo proper match to type. best use enum for type... LIMIT_MAKER is interesting!
+    postData.append(QString("&timeInForce=GTC"));
+    postData.append(QString("&quantity=%1").arg(quantityRounded));
+    postData.append(QString("&price=%1").arg(priceRounded));
+
+    int nextCid = getNextCid();
+
+    postData.append(QString("&newClientOrderId=%1").arg(nextCid));
+    postData.append(QString("&newOrderRespType=FULL"));
+
+    if (!triggerApiRequest(path, true, POST, &postData,
+                           [this, nextCid, symbol](QNetworkReply *reply) {
+        if (reply->error() != QNetworkReply::NoError) {
+            QByteArray arr = reply->readAll();
+            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+            emit orderCompleted(name(), nextCid, 0.0, 0.0, QString(arr), symbol, 0.0, QString());
+            return;
+        }
+        QByteArray arr = reply->readAll();
+        QJsonDocument d = QJsonDocument::fromJson(arr);
+        qDebug() << __PRETTY_FUNCTION__ << d; // QJsonDocument({"clientOrderId":"1","executedQty":"0.00000000","fills":[],"orderId":24825404,"origQty":"1.00000000","price":"0.00400000","side":"SELL","status":"NEW","symbol":"BNBBTC","timeInForce":"GTC","transactTime":1518901884363,"type":"LIMIT"})
+        // QJsonDocument({"clientOrderId":"2","executedQty":"1.00000000","fills":[{"commission":"0.00014788","commissionAsset":"BNB","price":"0.00108180","qty":"1.00000000","tradeId":9579646}],"orderId":24831909,"origQty":"1.00000000","price":"0.00108000","side":"SELL","status":"FILLED","symbol":"BNBBTC","timeInForce":"GTC","transactTime":1518905398324,"type":"LIMIT"})
+        if (d.isObject()) {
+            _pendingOrdersMap[QString("%1").arg((int)d.object()["orderId"].toDouble())] = nextCid;
+            storePendingOrders();
+            qDebug() << __PRETTY_FUNCTION__ << "got orderId(" << nextCid << ")=" << d.object();
+        } else {
+          qDebug() << __PRETTY_FUNCTION__ << "no object!: " << d;
+          emit orderCompleted(name(), nextCid, 0.0, 0.0, QString(arr), symbol, 0.0, QString());
+        }
+    })){
+        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+    }
+    return nextCid;
 }

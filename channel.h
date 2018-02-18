@@ -86,6 +86,7 @@ public:
     virtual ~ChannelTrades();
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;
+    virtual bool handleDataFromBinance(const QJsonObject &data, bool complete) override; // complete=true -> complete set, false -> partial update
 
     class TradesItem
     {

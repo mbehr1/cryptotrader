@@ -188,6 +188,21 @@ Engine::Engine(QObject *parent) : QObject(parent)
         assert(_exchanges.find(exchange->name()) == _exchanges.end());
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
 
+        if (1) {
+            _providerCandlesMap[mapName(exchange.get(), "BNBBTC")] =
+                    std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(exchange->getChannel("BNBBTC", ExchangeBinance::Trades)), this);
+        }
+
+        if(1) {
+            std::shared_ptr<StrategyRSINoLoss> strategy5 =
+                    std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#b1"), "BNBBTC", 100.0, 31, 59, _providerCandlesMap[mapName(exchange.get(), "BNBBTC")], this, false, 1.002);
+            strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel("BNBBTC", ExchangeBinance::Book)));
+            connect(&(*strategy5), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)),
+                    this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+            _strategies.push_front(strategy5);
+        }
+
+
     }
 
     if(1){ // create bitFlyer exchange
@@ -480,7 +495,7 @@ void Engine::onTradeAdvice(QString exchange, QString id, QString tradePair, bool
 void Engine::onOrderCompleted(QString exchange, int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur)
 {
     auto &waitForFundsUpdateMap = _waitForFundsUpdateMaps[exchange];
-    qDebug() << __PRETTY_FUNCTION__ << exchange << cid << amount << price << status << waitForFundsUpdateMap.size();
+    qDebug() << __PRETTY_FUNCTION__ << exchange << cid << amount << price << status << pair << fee << feeCur << waitForFundsUpdateMap.size();
     auto it = waitForFundsUpdateMap.find(cid);
     if (it != waitForFundsUpdateMap.end()) {
         FundsUpdateMapEntry &entry = it->second;

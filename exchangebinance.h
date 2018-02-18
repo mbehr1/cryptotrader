@@ -71,6 +71,11 @@ protected:
     std::map<QString, QJsonArray> _meOrders; // by symbol(pair)
     std::map<QString, QJsonObject> _meOrdersMap; // orders by orderId see _pendingsOrdersMap as well!
 
+    void triggerGetMyTrades(const QString &symbol);
+    void updateTrades(const QString &symbol, const QJsonArray &arr);
+    std::map<QString, QJsonArray> _meTradesCache; // per symbol, full arr.
+    std::map<QString, std::map<QString, QJsonObject>> _meTradesMapMap; // per symbol and orderId
+    bool getCommissionForOrderId(const QString &symbol, const QString &orderId, double &fee, QString &feeCur) const;
 
     void printSymbols() const;
 private:
