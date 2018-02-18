@@ -371,7 +371,7 @@ void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
 
     if (!nrActive && _pendingOrdersMap.size()) {
         // todo need to check which of the pending orders are from proper symbol!
-        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << symbol << _pendingOrdersMap;
+        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << symbol << _pendingOrdersMap.size();
     }
 }
 
