@@ -62,6 +62,8 @@ protected:
 
     void triggerAccountInfo(); // contains balances as well
     QJsonObject _accountInfo;
+    std::map<QString, QJsonObject> _symbolMap; // by symbol
+    void updateSymbols(const QJsonArray &arr);
 
     void updateBalances(const QJsonArray &arr);
     QJsonArray _meBalances;

@@ -228,7 +228,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
     qWarning() << __PRETTY_FUNCTION__ << _pair << _lastStatus;
     // strategy:
     // if deltaPerc > 1.x (const)  then buy at iBuy and sell at iSell
-    if (deltaPerc > 0.7) { // 1% todo!
+    if (deltaPerc > 0.75) { // 1% todo!
         // do we have cur2 at iBuy
         // do we have cur1 at iSell
         double moneyToBuyCur2 = getAvailAmount(_exchg[iBuy], _cur2);

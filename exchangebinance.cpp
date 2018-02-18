@@ -179,6 +179,7 @@ void ExchangeBinance::triggerAccountInfo()
     // QByteArray postData;
     if (!triggerApiRequest(path, true, GET, 0,
                            [this](QNetworkReply *reply) {
+                           bool wasAuth = _isAuth;
         _isAuth = false;
         if (reply->error() != QNetworkReply::NoError) {
             qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
@@ -190,9 +191,18 @@ void ExchangeBinance::triggerAccountInfo()
         if (d.isObject()) {
             _accountInfo = d.object();
             _isAuth = true;
+            if (!wasAuth) {
+                // qDebug() << __PRETTY_FUNCTION__ << _accountInfo;
+            }
+            // "buyerCommission":0,"makerCommission":10,"sellerCommission":0,"takerCommission":10,
+            // currently we assume 0.1% fee and guess this is expressed by 10
+            if (_accountInfo["makerCommission"].toInt()!=10 || _accountInfo["takerCommission"].toInt() != 10) {
+                qWarning() << __PRETTY_FUNCTION__ << "expect different commissions!" << _accountInfo;
+            }
+
             if (_accountInfo.contains("balances"))
               updateBalances(_accountInfo["balances"].toArray());
-            if (!_accountInfo["canTrade"].toBool())
+            if (!_accountInfo["canTrade"].toBool()) // "canDeposit":true,"canTrade":true,"canWithdraw":true,
                 qDebug() << __PRETTY_FUNCTION__ << "got account into. canTrade=" << _accountInfo["canTrade"].toBool();
         } else
           qDebug() << __PRETTY_FUNCTION__ << d;
@@ -498,6 +508,8 @@ void ExchangeBinance::triggerExchangeInfo()
             _exchangeInfo = d.object();
             qDebug() << __PRETTY_FUNCTION__ << _exchangeInfo["serverTime"];
                            // todo we could check here for subscribed pairs!
+           if (_exchangeInfo.contains("symbols"))
+               updateSymbols(_exchangeInfo["symbols"].toArray());
             printSymbols();
         }
         qDebug() << __PRETTY_FUNCTION__ << d;
@@ -507,20 +519,24 @@ void ExchangeBinance::triggerExchangeInfo()
     }
 }
 
+void ExchangeBinance::updateSymbols(const QJsonArray &arr)
+{
+    // update symbol map
+    for (const auto & se : arr) {
+        if (se.isObject()) {
+            const auto &s = se.toObject();
+            _symbolMap[s["symbol"].toString()] = s;
+        } else
+            qWarning() << __PRETTY_FUNCTION__ << "can't handle " << se;
+    }
+}
+
 void ExchangeBinance::printSymbols() const
 { //QJsonValue(object, QJsonObject({"baseAsset":"ETH","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000100","tickSize":"0.00000100"},{"filterType":"LOT_SIZE","maxQty":"100000.00000000","minQty":"0.00100000","stepSize":"0.00100000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.00100000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"BTC","quotePrecision":8,"status":"TRADING","symbol":"ETHBTC"}))
 
-    if (_exchangeInfo.contains("symbols")){
-        auto arr = _exchangeInfo["symbols"].toArray();
-        qDebug() << __PRETTY_FUNCTION__;
-        for (const auto &el : arr) {
-            if (el.isObject()) {
-                const auto &s = el.toObject();
-                qDebug() << " " << s["symbol"].toString() << s["baseAsset"].toString() << s["quoteAsset"].toString() << s["status"].toString() << s;
-            } else {
-                qWarning() << __PRETTY_FUNCTION__ << "no obj:" << el;
-            }
-        }
+    for (const auto &si : _symbolMap) {
+        const auto &s = si.second;
+        qDebug() << " " << si.first << s["baseAsset"].toString() << s["quoteAsset"].toString() << s["status"].toString() << s;
     }
 }
 
@@ -623,18 +639,52 @@ bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, dou
 {
     (void)buy;
     (void)pair,
-    (void)feeCur1;
-    (void)feeCur2;
     (void)amount;
     (void)makerFee;
-    return false; // todo
+
+    // currently always 0,1% is used. but on which currency?
+    // lets be conservative and put it on both
+   feeCur1 = 0.001;
+   feeCur2 = 0.001;
+
+   qWarning() << __PRETTY_FUNCTION__ << "returning wrong fees. todo!";
+
+    return true;
 }
 
 bool ExchangeBinance::getMinAmount(const QString &pair, double &amount) const
 {
-    (void) pair;
-    (void)amount;
-    return false; // todo
+    // search in symbols.
+    const auto &si = _symbolMap.find(pair);
+    if (si != _symbolMap.cend()) {
+        // QJsonObject({"baseAsset":"ETH","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000100","tickSize":"0.00000100"},{"filterType":"LOT_SIZE","maxQty":"100000.00000000","minQty":"0.00100000","stepSize":"0.00100000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.00100000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"BTC","quotePrecision":8,"status":"TRADING","symbol":"ETHBTC"})
+        // QJsonObject({"baseAsset":"BNB","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000010","tickSize":"0.00000010"},{"filterType":"LOT_SIZE","maxQty":"90000000.00000000","minQty":"0.01000000","stepSize":"0.01000000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.00100000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"BTC","quotePrecision":8,"status":"TRADING","symbol":"BNBBTC"})
+        // QJsonObject({"baseAsset":"BNB","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000100","tickSize":"0.00000100"},{"filterType":"LOT_SIZE","maxQty":"90000000.00000000","minQty":"0.01000000","stepSize":"0.01000000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.01000000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"ETH","quotePrecision":8,"status":"TRADING","symbol":"BNBETH"})
+
+        // found it. now use ? above data not fitting to support docs "trading rules".
+        // let's use some fixed ones:
+
+        if (pair == "BNBETH") { amount = 1.0; return true; }
+        // fits if (pair == "ETHBTC") { amount = 0.001; return true; }
+        // if (pair == "BNBBTC") { amount = 0.001; return true; }
+        // fits if (pair == "BCCBTC") { amount = 0.001; return true; }
+
+        // for others use {"filterType":"LOT_SIZE","maxQty":"90000000.00000000","minQty":"0.01000000"
+        const auto &s = (*si).second;
+        if (s["filters"].isArray()) {
+            for (const auto &fi : s["filters"].toArray()) {
+                if (fi.isObject()) {
+                    const auto &f = fi.toObject();
+                    if (f["filterType"] == "LOT_SIZE") {
+                        assert(f.contains("minQty"));
+                        amount = f["minQty"].toString().toDouble();
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
 }
 
 void ExchangeBinance::onChannelTimeout(int id, bool isTimeout)
@@ -656,8 +706,8 @@ int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const
     QByteArray path("/api/v3/order");
     QByteArray postData;
 
-    QString priceRounded = QString("%1").arg(price, 0, 'f', 5); // todo get 5 from symbol info!
-    QString quantityRounded = QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 5); // todo get 5 from symbol info!
+    QString priceRounded = QString("%1").arg(price, 0, 'f', 7); // todo get 7 from symbol info!
+    QString quantityRounded = QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 7); // todo get 7 from symbol info!
 
     postData.append(QString("symbol=%1").arg(symbol));
     postData.append(QString("&side=%1").arg(amount >= 0.0 ? "BUY" : "SELL"));
