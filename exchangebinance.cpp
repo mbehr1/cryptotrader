@@ -669,7 +669,7 @@ bool ExchangeBinance::getMinAmount(const QString &pair, double &amount) const
         // if (pair == "BNBBTC") { amount = 0.001; return true; }
         // fits if (pair == "BCCBTC") { amount = 0.001; return true; }
 
-        // for others use {"filterType":"LOT_SIZE","maxQty":"90000000.00000000","minQty":"0.01000000"
+        // for others use {"filterType":"LOT_SIZE","maxQty":"100000.00000000","minQty":"0.00100000","stepSize":"0.00100000"}
         const auto &s = (*si).second;
         if (s["filters"].isArray()) {
             for (const auto &fi : s["filters"].toArray()) {
@@ -678,6 +678,46 @@ bool ExchangeBinance::getMinAmount(const QString &pair, double &amount) const
                     if (f["filterType"] == "LOT_SIZE") {
                         assert(f.contains("minQty"));
                         amount = f["minQty"].toString().toDouble();
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool ExchangeBinance::getStepSize(const QString &pair, int &stepSize) const
+{
+    // search in symbols.
+    const auto &si = _symbolMap.find(pair);
+    if (si != _symbolMap.cend()) {
+        const auto &s = (*si).second;
+        if (s["filters"].isArray()) {
+            for (const auto &fi : s["filters"].toArray()) {
+                if (fi.isObject()) {
+                    const auto &f = fi.toObject();
+                    if (f["filterType"] == "LOT_SIZE") {
+                        assert(f.contains("stepSize"));
+                        const QString &stepStr = f["stepSize"].toString();
+                        auto spl = stepStr.split('.');
+                        if (spl[0].length()>1) {
+                            stepSize = spl[0].length()-1;
+                            qDebug() << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
+                            return true;
+                        }
+                        if (spl[0].length()==1 && spl[0] == "1") {
+                            stepSize = 0;
+                            qDebug() << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
+                            return true;
+                        }
+                        stepSize = -1;
+                        QString str1 = spl[1];
+                        while(str1.startsWith('0')) {
+                            --stepSize;
+                            str1.remove(0, 1);
+                        }
+                        qDebug() << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
                         return true;
                     }
                 }
@@ -698,6 +738,22 @@ QString ExchangeBinance::getStatusMsg() const
     QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
             .arg(_isAuth ? "AU" : "not authenticated!").arg(name());
 
+    // add balances:
+    for (const auto &bal : _meBalances) {
+        if (bal.isObject()) {
+            const auto &b = bal.toObject();
+            if (b["free"].toString().toDouble() != 0.0 || b["locked"].toString().toDouble() != 0.0)
+                toRet.append(QString("\n%1: %2 (+l=%3)")
+                             .arg(b["asset"].toString())
+                        .arg(b["free"].toString().toDouble())
+                        .arg(b["locked"].toString().toDouble())
+                        );
+        }
+    }
+    toRet.append('\n');
+    int stepSize = -100;
+    getStepSize("BCCBTC", stepSize);
+    toRet.append(QString("getStepSize(BCCBTC)=%1").arg(stepSize));
     return toRet;
 }
 
@@ -706,8 +762,14 @@ int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const
     QByteArray path("/api/v3/order");
     QByteArray postData;
 
-    QString priceRounded = QString("%1").arg(price, 0, 'f', 7); // todo get 7 from symbol info!
-    QString quantityRounded = QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 7); // todo get 7 from symbol info!
+    QString priceRounded = QString("%1").arg(price, 0, 'f', 5); // todo get 5 from symbol info!
+    int stepSize = -5;
+    getStepSize(symbol, stepSize);
+    if (stepSize>0) {
+        qWarning() << __PRETTY_FUNCTION__ << "cant' handle stepSize" << stepSize << symbol << amount << price;
+        return 0;
+    }
+    QString quantityRounded = QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', -stepSize); // todo get 7 from symbol info! LOT_SIZE step
 
     postData.append(QString("symbol=%1").arg(symbol));
     postData.append(QString("&side=%1").arg(amount >= 0.0 ? "BUY" : "SELL"));

@@ -685,7 +685,21 @@ QString ExchangeBitFlyer::getStatusMsg() const
             .arg(_isAuth ? "AU" : "not authenticated!").arg(name());
     toRet.append(QString("\n Health=%1").arg(_health));
 
-    // toRet.append(QString("\n %1").arg(_accountInfoChannel.getStatusMsg()));
+    // add balances:
+    for (const auto &ma : _meBalancesMap) {
+        const auto &m = ma.second;
+        for (const auto &cu : m) {
+            const QJsonObject &b = cu.toObject();
+            if (b.contains("currency_code")) {
+                bool hasAvailable = b.contains("available");
+                double bAmount = hasAvailable ? b["available"].toDouble() : b["amount"].toDouble();
+                if (bAmount != 0.0)
+                    toRet.append(QString("\n%1: %2: %3").arg(ma.first).arg(b["currency_code"].toString()).arg(bAmount));
+            }
+        }
+    }
+    toRet.append('\n');
+
     return toRet;
 }
 

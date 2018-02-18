@@ -1,3 +1,4 @@
+#include <cassert>
 #include <QDebug>
 #include "tradestrategy.h"
 
@@ -17,6 +18,7 @@ TradeStrategy::~TradeStrategy()
     qDebug() << __PRETTY_FUNCTION__ << _id;
     _settings.setValue("paused", _paused);
     _settings.setValue("waitForFundsUpdate", _waitForFundsUpdate);
+    _settings.sync();
 }
 
 QString TradeStrategy::getStatusMsg() const
@@ -33,6 +35,8 @@ QString TradeStrategy::onNewBotMessage(const QString &msg)
     else if (msg.compare("pause")==0) {
         if (!_paused) {
             _paused = true;
+            _settings.setValue("paused", _paused);
+            _settings.sync();
             toRet.append("paused!\n");
         } else
             toRet.append("already paused!\n");
@@ -41,6 +45,7 @@ QString TradeStrategy::onNewBotMessage(const QString &msg)
     else if (msg.compare("resume")==0) {
         if (_paused) {
             _paused = false;
+            _settings.setValue("paused", _paused);
             toRet.append("resumed.\n");
         } else
             toRet.append("wasn't paused yet!\n");

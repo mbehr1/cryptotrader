@@ -26,6 +26,7 @@ public:
                   ) override;
     virtual void reconnect() override;
     virtual bool getMinAmount(const QString &pair, double &amount) const override;
+    bool getStepSize(const QString &pair, int &stepSize) const;
     virtual bool getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount = 0.0, bool makerFee=false) override;
 
     typedef enum {Book=0, Trades} CHANNELTYPE;

@@ -110,6 +110,8 @@ QString StrategyArbitrage::onNewBotMessage(const QString &msg)
                 else {
                     return toRet.append(QString("cur <%1> unknown!").arg(cur));
                 }
+            e.storeSettings(_settings);
+            _settings.sync();
             toRet.append(QString("set %1 avail amount to %2 %3").arg(e._name).arg(amount).arg(cur));
         } else {
             toRet.append(QString("didn't found exchange <%1>!").arg(ename));
