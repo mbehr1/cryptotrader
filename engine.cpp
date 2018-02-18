@@ -9,6 +9,7 @@
 #include "signal.h"
 #include "strategyrsinoloss.h"
 #include "strategyexchgdelta.h"
+#include "strategyarbitrage.h"
 #include "exchangebitfinex.h"
 #include "exchangebitflyer.h"
 #include "exchangebinance.h"
@@ -238,13 +239,13 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _exchanges.insert(std::make_pair(exchange->name(), exchange));
 
         // for bitFlyer we allocate them static
-        if (0) {
+        if (1) {
             _providerCandlesMap[mapName(exchange.get(), "FX_BTC_JPY")] =
                     std::make_shared<ProviderCandles>(std::dynamic_pointer_cast<ChannelTrades>(exchange->getChannel("FX_BTC_JPY", ExchangeBitFlyer::Trades)), this);
         }
 
         // and we can configure the strategy here as well:
-        if(0) {
+        if(1) {
             std::shared_ptr<StrategyRSINoLoss> strategy5 =
                     std::make_shared<StrategyRSINoLoss>(exchange->name(), QString("#j1"), "FX_BTC_JPY", 15000.0, 31, 59, _providerCandlesMap[mapName(exchange.get(), "FX_BTC_JPY")], this, false, 1.002);
             strategy5->setChannelBook(std::dynamic_pointer_cast<ChannelBooks>(exchange->getChannel("FX_BTC_JPY", ExchangeBitFlyer::Book)));
@@ -276,8 +277,27 @@ Engine::Engine(QObject *parent) : QObject(parent)
                     this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
             _strategies.push_front(strategy);
         }
+    }
 
+    // now that we have all exchanges create the strategies for the arbitrage ones:
+    if (1) {
+        std::shared_ptr<StrategyArbitrage> strategy = std::make_shared<StrategyArbitrage>(QString("#a1"), this);
+        connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
+        connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)), this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
 
+        // configure it:
+        auto eBinance = std::dynamic_pointer_cast<ExchangeBinance>( _exchanges[binanceName]);
+        auto eBitflyer = std::dynamic_pointer_cast<ExchangeBitFlyer>( _exchanges[bitFlyerName]);
+
+        strategy->addExchangePair(_exchanges[bitfinexName], "tBCHBTC", "BCH", "BTC");
+        strategy->addExchangePair(_exchanges[bitFlyerName], "BCH_BTC", "BCH", "BTC");
+        strategy->addExchangePair(_exchanges[binanceName], "BCCBTC", "BCC", "BTC");
+
+        // now add available channels: (put this inside addExchangePair!
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBitflyer->getChannel("BCH_BTC", ExchangeBitFlyer::Book)));
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBinance->getChannel("BCCBTC", ExchangeBinance::Book)));
+
+        _strategies.push_front(strategy);
     }
 
 
