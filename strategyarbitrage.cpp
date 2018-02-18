@@ -10,6 +10,8 @@ StrategyArbitrage::StrategyArbitrage(const QString &id, QObject *parent) :
     _timerId = startTimer(1000); // check each sec todo change to notify based on channelbooks
 
     // load persistency data
+    _MaxTimeDiffMs = _settings.value("MaxTimeDiffMs", 30000).toInt();
+    _MinDeltaPerc = _settings.value("MinDeltaPerc", 0.75).toDouble();
 }
 
 bool StrategyArbitrage::addExchangePair(std::shared_ptr<Exchange> &exchg, const QString &pair, const QString &cur1, const QString &cur2)
@@ -50,6 +52,9 @@ StrategyArbitrage::~StrategyArbitrage()
     qDebug() << __PRETTY_FUNCTION__ << _id;
     killTimer(_timerId);
     // store persistency
+    _settings.setValue("MaxTimeDiffMs", _MaxTimeDiffMs);
+    _settings.setValue("MinDeltaPerc", _MinDeltaPerc);
+
     // and release the shared_ptrs
     for (auto &it : _exchgs) {
         ExchgData &e = it.second;
@@ -70,6 +75,7 @@ QString StrategyArbitrage::getStatusMsg() const
                          .arg(e._availCur1).arg(e._cur1)
                          .arg(e._availCur2).arg(e._cur2));
     }
+    toRet.append("\n");
 
     toRet.append(_lastStatus);
     return toRet;
@@ -158,8 +164,141 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
             return;
         }
 
-    // todo
-    _lastStatus = "todo nyi";
+    // check all possible combinations for (n*(n-1) / 2):
+    _lastStatus.clear();
+
+    for ( auto it1 = _exchgs.begin(); it1 != _exchgs.end(); ++it1) {
+        // order pending?
+        ExchgData &e1 = (*it1).second;
+        if (!e1._waitForOrder) {
+            auto it2 = it1;
+            for (++it2 ; it2 != _exchgs.end(); ++it2) {
+                ExchgData &e2 = (*it2).second;
+                if (!e2._waitForOrder && !e1._waitForOrder) { // e1. might change during this iteration
+                    qDebug() << "e1=" << e1._name << "e2=" << e2._name;
+
+                    // are both prices from within same time range?
+                    qint64 msecsDiff = e1._book->lastMsgTime().msecsTo(e2._book->lastMsgTime());
+                    if (msecsDiff < 0) msecsDiff = -msecsDiff;
+                    if (msecsDiff > _MaxTimeDiffMs) {
+                        qDebug() << __PRETTY_FUNCTION__ << _id << "book times differences too big!" << e1._name << e2._name << msecsDiff;
+                    } else {
+                        // check prices:
+                        double price1Buy, price1Sell, price2Buy, price2Sell, avg;
+                        double amount = e2._availCur1 * 1.0042; // how much we buy depends on how much we have on the other todo factor see below
+                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
+                        bool ok = e1._book->getPrices(true, amount, avg, price1Buy); // ask
+                        if (!ok) continue;
+                        amount = e1._availCur1;
+                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
+                        ok = e1._book->getPrices(false, amount, avg, price1Sell); // Bid
+                        if (!ok) continue;
+
+                        amount = e1._availCur1 * 1.0042; ; // todo factor
+                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
+                        ok = e2._book->getPrices(true, amount, avg, price2Buy); // ask
+                        if (!ok) continue;
+
+                        amount = e2._availCur1;
+                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
+                        ok = e2._book->getPrices(false, amount, avg, price2Sell); // bid
+                        if (!ok) continue;
+
+                        if (price2Buy == 0.0) { // todo sell?
+                            qDebug() << __PRETTY_FUNCTION__ << _id << e2._name << "price2Buy == 0";
+                            continue;
+                        }
+
+                        // some sanity checks:
+                        if (price1Sell > price1Buy) {
+                            _lastStatus.append(QString("\nbid (%2) > ask (%3) on %1 for %4").arg(e1._name).arg(price1Sell).arg(price1Buy).arg(e1._pair));
+                            continue;
+                        }
+                        if (price2Sell > price2Buy) {
+                            _lastStatus.append(QString("\nbid (%2) > ask (%3) on %1 for %4").arg(e2._name).arg(price2Sell).arg(price2Buy).arg(e2._pair));
+                            continue;
+                        }
+
+                        // which price is lower?
+                        int iBuy;
+                        double priceSell, priceBuy;
+                        if (price1Buy < price2Sell) {
+                            iBuy = 0;
+                            priceBuy = price1Buy;
+                            priceSell = price2Sell;
+                        } else {
+                            if (price2Buy < price1Sell) {
+                                iBuy = 1;
+                                priceBuy = price2Buy;
+                                priceSell = price1Sell;
+                            } else {
+                                _lastStatus.append( QString("\nprices interleave: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
+                                continue;
+                            }
+                        }
+                        ExchgData &eBuy = iBuy == 0 ? e1 : e2;
+                        ExchgData &eSell = iBuy == 0 ? e2 : e1;
+                        double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
+                        _lastStatus.append(QString("\nbuy %1 at %2%6, sell %3 at %4%7, delta %5%%")
+                                           .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
+                                           .arg(eBuy._cur2).arg(eSell._cur2));
+
+                        if (deltaPerc >= _MinDeltaPerc) {
+                            // do we have cur2 at eBuy
+                            // do we have cur1 at eSell
+                            double moneyToBuyCur2 = eBuy._availCur2;
+                            double amountSellCur1 = eSell._availCur1;
+
+                            // do we have to take fees into consideration? the 1% (todo const) needs to be high enough to compensate for both fees!
+                            // yes, we do. See below (we need to buy more than we sell from cur1 otherwise the fees make it disappear)
+
+                            // reduce amountSellCur1 if we don't have enough money to buy
+                            double likeToSellCur1 = amountSellCur1;
+                            if (amountSellCur1*priceBuy >= moneyToBuyCur2) {
+                                amountSellCur1 = moneyToBuyCur2 / priceBuy;
+                            }
+
+                            // determine min amounts to buy/sell:
+                            double minAmount = 0.0001; // todo use const for the case unknown at exchange
+                            // now get from exchanges:
+                            double minTemp = 0.0;
+                            if (eSell._book->exchange()->getMinAmount(eSell._pair, minTemp)) {
+                                if (minTemp > minAmount) minAmount = minTemp;
+                            }
+                            if (eBuy._book->exchange()->getMinAmount(eBuy._pair, minTemp)) {
+                                if (minTemp > minAmount) minAmount = minTemp;
+                            }
+                            // todo check minValues (amount*price) as well
+                            if (amountSellCur1>= minAmount) {
+                                QString str;
+                                double amountBuyCur1 = amountSellCur1 * 1.0042; // todo const. use 2xfee
+
+                                str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(eSell._cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(eSell._cur2).arg(eSell._name);
+                                _lastStatus.append(str);
+                                qWarning() << str << eSell._book->symbol();
+                                emit subscriberMsg(str);
+                                str = QString("buy %1 %2 for %3 %4 at %5").arg(amountBuyCur1).arg(eBuy._cur1).arg(amountBuyCur1*priceBuy).arg(eBuy._cur2).arg(eBuy._name);
+                                _lastStatus.append(str);
+                                qWarning() << str << eBuy._book->symbol();
+                                emit subscriberMsg(str);
+
+                                // buy:
+                                eBuy._waitForOrder = true;
+                                emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, amountBuyCur1, priceBuy * 1.001); // slightly higher price for higher rel.
+                                // sell:
+                                eSell._waitForOrder = true;
+                                emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, amountSellCur1, priceSell * 0.999); // slightly lower price for higher rel.
+                            } else {
+                                _lastStatus.append(QString("\nwould like to sell %3 at %1 and buy at %2 but don't enough money.").arg(eSell._name).arg(eBuy._name).arg(eSell._cur1));
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+
     qDebug() << __PRETTY_FUNCTION__ << _id << _lastStatus;
 }
 

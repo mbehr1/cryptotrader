@@ -199,7 +199,6 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
         return;
     }
 
-
     // which price is lower?
     int iBuy, iSell;
     double priceSell, priceBuy;

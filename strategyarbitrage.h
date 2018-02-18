@@ -49,7 +49,8 @@ protected:
     QString _lastStatus; // will be returned with getStatusMsg
 
     // persistent data (on top of within ExchgData class):
-
+    qint64 _MaxTimeDiffMs; // max time distance until we ignore them
+    double _MinDeltaPerc; // if price delta is higher we do sell. default 0.75%. needs to be higher than sums of fees!
 };
 
 #endif // STRATEGYARBITRAGE_H
