@@ -253,7 +253,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             // yes, we do. See below (we need to buy more than we sell from cur1 otherwise the fees make it disappear)
 
                             // reduce amountSellCur1 if we don't have enough money to buy
-                            double likeToSellCur1 = amountSellCur1;
+                            //double likeToSellCur1 = amountSellCur1;
                             if (amountSellCur1*priceBuy >= moneyToBuyCur2) {
                                 amountSellCur1 = moneyToBuyCur2 / priceBuy;
                             }
