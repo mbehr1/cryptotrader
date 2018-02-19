@@ -331,7 +331,7 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
     if (gotAmount >= amount) {
         avg = volume / gotAmount;
         limit = retLimit;
-        qDebug() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
+        //qDebug() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
         return true;
     } else {
         qWarning() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
