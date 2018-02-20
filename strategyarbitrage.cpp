@@ -229,16 +229,16 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                                 priceBuy = price2Buy;
                                 priceSell = price1Sell;
                             } else {
-                                _lastStatus.append( QString("\nprices interleaveor not avail: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
+                                _lastStatus.append( QString("\nprices interleave or not avail: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
                                 continue;
                             }
                         }
                         ExchgData &eBuy = iBuy == 0 ? e1 : e2;
                         ExchgData &eSell = iBuy == 0 ? e2 : e1;
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
-                        _lastStatus.append(QString("\nbuy %1 at %2%6, sell %3 at %4%7, delta %5%%")
+                        _lastStatus.append(QString("\nbuy %1 %6 at %2%6, sell %3 at %4%7, delta %5%")
                                            .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
-                                           .arg(eBuy._cur2).arg(eSell._cur2));
+                                           .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
 
                         if (deltaPerc >= _MinDeltaPerc) {
                             // do we have cur2 at eBuy
