@@ -177,7 +177,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
             for (++it2 ; it2 != _exchgs.end(); ++it2) {
                 ExchgData &e2 = (*it2).second;
                 if (!e2._waitForOrder && !e1._waitForOrder) { // e1. might change during this iteration
-                    qDebug() << "e1=" << e1._name << "e2=" << e2._name;
+                    //qDebug() << "e1=" << e1._name << "e2=" << e2._name;
 
                     // are both prices from within same time range?
                     qint64 msecsDiff = e1._book->lastMsgTime().msecsTo(e2._book->lastMsgTime());
