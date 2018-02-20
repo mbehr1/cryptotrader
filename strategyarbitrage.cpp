@@ -186,37 +186,32 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         qDebug() << __PRETTY_FUNCTION__ << _id << "book times differences too big!" << e1._name << e2._name << msecsDiff;
                     } else {
                         // check prices:
-                        double price1Buy, price1Sell, price2Buy, price2Sell, avg;
+                        double price1Buy=0.0, price1Sell=0.0, price2Buy=0.0, price2Sell=0.0, avg;
                         double amount = e2._availCur1 * 1.0042; // how much we buy depends on how much we have on the other todo factor see below
                         if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        bool ok = e1._book->getPrices(true, amount, avg, price1Buy); // ask
-                        if (!ok) continue;
+                        bool gotPrice1Buy = e1._book->getPrices(true, amount, avg, price1Buy); // ask
+                        // we dont abort yet if (!ok) continue;
                         amount = e1._availCur1;
                         if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        ok = e1._book->getPrices(false, amount, avg, price1Sell); // Bid
-                        if (!ok) continue;
+                        bool gotPrice1Sell = e1._book->getPrices(false, amount, avg, price1Sell); // Bid
+                        // if (!ok) continue;
 
                         amount = e1._availCur1 * 1.0042; ; // todo factor
                         if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        ok = e2._book->getPrices(true, amount, avg, price2Buy); // ask
-                        if (!ok) continue;
+                        bool gotPrice2Buy = e2._book->getPrices(true, amount, avg, price2Buy); // ask
+                        //if (!ok) continue;
 
                         amount = e2._availCur1;
                         if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        ok = e2._book->getPrices(false, amount, avg, price2Sell); // bid
-                        if (!ok) continue;
-
-                        if (price2Buy == 0.0) { // todo sell?
-                            qDebug() << __PRETTY_FUNCTION__ << _id << e2._name << "price2Buy == 0";
-                            continue;
-                        }
+                        bool gotPrice2Sell = e2._book->getPrices(false, amount, avg, price2Sell); // bid
+                        //if (!ok) continue;
 
                         // some sanity checks:
-                        if (price1Sell > price1Buy) {
+                        if (gotPrice1Sell && gotPrice1Buy && (price1Sell > price1Buy)) {
                             _lastStatus.append(QString("\nbid (%2) > ask (%3) on %1 for %4").arg(e1._name).arg(price1Sell).arg(price1Buy).arg(e1._pair));
                             continue;
                         }
-                        if (price2Sell > price2Buy) {
+                        if (gotPrice2Sell && gotPrice2Buy && (price2Sell > price2Buy)) {
                             _lastStatus.append(QString("\nbid (%2) > ask (%3) on %1 for %4").arg(e2._name).arg(price2Sell).arg(price2Buy).arg(e2._pair));
                             continue;
                         }
@@ -224,17 +219,17 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         // which price is lower?
                         int iBuy;
                         double priceSell, priceBuy;
-                        if (price1Buy < price2Sell) {
+                        if (gotPrice1Buy && gotPrice2Sell && (price1Buy < price2Sell)) {
                             iBuy = 0;
                             priceBuy = price1Buy;
                             priceSell = price2Sell;
                         } else {
-                            if (price2Buy < price1Sell) {
+                            if (gotPrice2Buy && gotPrice1Sell && (price2Buy < price1Sell)) {
                                 iBuy = 1;
                                 priceBuy = price2Buy;
                                 priceSell = price1Sell;
                             } else {
-                                _lastStatus.append( QString("\nprices interleave: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
+                                _lastStatus.append( QString("\nprices interleaveor not avail: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
                                 continue;
                             }
                         }
