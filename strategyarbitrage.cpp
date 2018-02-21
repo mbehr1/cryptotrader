@@ -1,5 +1,7 @@
 #include <cassert>
 #include <QDebug>
+#include <QFile>
+#include <QDir>
 #include "strategyarbitrage.h"
 
 StrategyArbitrage::StrategyArbitrage(const QString &id, QObject *parent) :
@@ -12,6 +14,16 @@ StrategyArbitrage::StrategyArbitrage(const QString &id, QObject *parent) :
     // load persistency data
     _MaxTimeDiffMs = _settings.value("MaxTimeDiffMs", 30000).toInt();
     _MinDeltaPerc = _settings.value("MinDeltaPerc", 0.75).toDouble();
+
+    // open file for csv writing:
+    // needed? QDir::setCurrent()
+    _csvFile.setFileName(QString("%1.csv").arg(_id));
+    if (_csvFile.open(QFile::WriteOnly | QFile::Append)) {
+        _csvStream.setDevice(&_csvFile);
+        qDebug() << __PRETTY_FUNCTION__ << "using" << QDir::current().absolutePath() <<  _csvFile.fileName() << "as csv file.";
+    } else {
+        qWarning() << "couldn't open file for writing: " << _csvFile.fileName();
+    }
 }
 
 bool StrategyArbitrage::addExchangePair(std::shared_ptr<Exchange> &exchg, const QString &pair, const QString &cur1, const QString &cur2)
@@ -63,6 +75,8 @@ StrategyArbitrage::~StrategyArbitrage()
         e._e = 0;
     }
     _exchgs.clear();
+    _csvStream.flush();
+    _csvFile.close();
 }
 
 QString StrategyArbitrage::getStatusMsg() const
@@ -168,6 +182,26 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
     // check all possible combinations for (n*(n-1) / 2):
     _lastStatus.clear();
+
+    // csv handling:
+    // we want a output: e1 bid, e1 ask, e2 bid, e2 ask,...
+    {
+        // let's do simply an additional loop. not efficient, but for now easier:
+        _csvStream << QDateTime::currentDateTime().toString("dd.MM.yy hh:mm:ss") << ',';
+        for (const auto &e: _exchgs) {
+            // we use the min amount for now (todo check with avail amount)
+            double priceBid=0.0, priceAsk=0.0;
+            const ExchgData &e1 = e.second;
+            double amount = 0.000001;
+            double avg;
+            e1._book->getPrices(false, amount, avg, priceBid);
+            e1._book->getPrices(true, amount, avg, priceAsk);
+            _csvStream << priceBid << ',' << priceAsk << ',';
+        }
+        _csvStream << "\n";
+        if (QDateTime::currentDateTime().currentSecsSinceEpoch()%60==0)
+            _csvStream.flush();
+    }
 
     for ( auto it1 = _exchgs.begin(); it1 != _exchgs.end(); ++it1) {
         // order pending?

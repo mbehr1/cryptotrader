@@ -2,6 +2,8 @@
 #define STRATEGYARBITRAGE_H
 
 #include <memory>
+#include <QTextStream>
+#include <QFile>
 #include "tradestrategy.h"
 #include "exchange.h"
 
@@ -47,6 +49,8 @@ protected:
     void timerEvent(QTimerEvent *event) override;
     int _timerId;
     QString _lastStatus; // will be returned with getStatusMsg
+    QFile _csvFile;
+    QTextStream _csvStream;
 
     // persistent data (on top of within ExchgData class):
     qint64 _MaxTimeDiffMs; // max time distance until we ignore them
