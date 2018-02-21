@@ -199,7 +199,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
             _csvStream << priceBid << ',' << priceAsk << ',';
         }
         _csvStream << "\n";
-        if (QDateTime::currentSecsSinceEpoch()%60==0)
+        if (QDateTime::currentMSecsSinceEpoch()%60000==0)
             _csvStream.flush();
     }
 
