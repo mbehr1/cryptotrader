@@ -356,6 +356,8 @@ void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double p
 
         if (e._availCur1 < 0.0) e._availCur1 = 0.0;
         if (e._availCur2 < 0.0) e._availCur2 = 0.0;
+        e.storeSettings(_settings);
+        _settings.sync();
         qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 after funds update: %2 %3 / %4 %5").arg(e._name).arg(e._availCur1).arg(e._cur1).arg(e._availCur2).arg(e._cur2);
     } else {
         qWarning() << __PRETTY_FUNCTION__ << _id << "unknown exchange!" << exchange;
