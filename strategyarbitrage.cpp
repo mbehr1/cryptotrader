@@ -222,23 +222,29 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         // check prices:
                         double price1Buy=0.0, price1Sell=0.0, price2Buy=0.0, price2Sell=0.0, avg;
                         double amount = e2._availCur1 * 1.0042; // how much we buy depends on how much we have on the other todo factor see below
-                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        bool gotPrice1Buy = e1._book->getPrices(true, amount, avg, price1Buy); // ask
+                        double maxAmountE1Buy = amount;
+                        bool gotPrice1Buy = e1._book->getPrices(true, amount, avg, price1Buy, &maxAmountE1Buy); // ask
+                        if (!gotPrice1Buy && maxAmountE1Buy > 0.0)
+                            gotPrice1Buy = e1._book->getPrices(true, maxAmountE1Buy, avg, price1Buy);
+
                         // we dont abort yet if (!ok) continue;
                         amount = e1._availCur1;
-                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        bool gotPrice1Sell = e1._book->getPrices(false, amount, avg, price1Sell); // Bid
-                        // if (!ok) continue;
+                        double maxAmountE1Sell = amount;
+                        bool gotPrice1Sell = e1._book->getPrices(false, amount, avg, price1Sell, &maxAmountE1Sell); // Bid
+                        if (!gotPrice1Sell && maxAmountE1Sell>0.0)
+                            gotPrice1Sell = e1._book->getPrices(false, maxAmountE1Sell, avg, price1Sell);
 
                         amount = e1._availCur1 * 1.0042; ; // todo factor
-                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        bool gotPrice2Buy = e2._book->getPrices(true, amount, avg, price2Buy); // ask
-                        //if (!ok) continue;
+                        double maxAmountE2Buy = amount;
+                        bool gotPrice2Buy = e2._book->getPrices(true, amount, avg, price2Buy, &maxAmountE2Buy); // ask
+                        if (!gotPrice2Buy && maxAmountE2Buy>0.0)
+                            gotPrice2Buy = e2._book->getPrices(true, maxAmountE2Buy, avg, price2Buy);
 
                         amount = e2._availCur1;
-                        if (amount <= 0.0) amount = 0.000001; // if we ask for 0 we get !ok
-                        bool gotPrice2Sell = e2._book->getPrices(false, amount, avg, price2Sell); // bid
-                        //if (!ok) continue;
+                        double maxAmountE2Sell = amount;
+                        bool gotPrice2Sell = e2._book->getPrices(false, amount, avg, price2Sell, &maxAmountE2Sell); // bid
+                        if (!gotPrice2Sell && maxAmountE2Sell>0.0)
+                            gotPrice2Sell = e2._book->getPrices(false, maxAmountE2Sell, avg, price2Sell);
 
                         // some sanity checks:
                         if (gotPrice1Sell && gotPrice1Buy && (price1Sell > price1Buy)) {
@@ -253,15 +259,20 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         // which price is lower?
                         int iBuy;
                         double priceSell, priceBuy;
+                        double maxAmountSell, maxAmountBuy;
                         if (gotPrice1Buy && gotPrice2Sell && (price1Buy < price2Sell)) {
                             iBuy = 0;
                             priceBuy = price1Buy;
                             priceSell = price2Sell;
+                            maxAmountBuy = maxAmountE1Buy;
+                            maxAmountSell = maxAmountE2Sell;
                         } else {
                             if (gotPrice2Buy && gotPrice1Sell && (price2Buy < price1Sell)) {
                                 iBuy = 1;
                                 priceBuy = price2Buy;
                                 priceSell = price1Sell;
+                                maxAmountBuy = maxAmountE2Buy;
+                                maxAmountSell = maxAmountE1Sell;
                             } else {
                                 _lastStatus.append( QString("\nprices interleave or not avail: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
                                 continue;
@@ -278,15 +289,23 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             // do we have cur2 at eBuy
                             // do we have cur1 at eSell
                             double moneyToBuyCur2 = eBuy._availCur2;
-                            double amountSellCur1 = eSell._availCur1;
+                            double amountSellCur1 = std::min(maxAmountSell, eSell._availCur1);
 
                             // do we have to take fees into consideration? the 1% (todo const) needs to be high enough to compensate for both fees!
                             // yes, we do. See below (we need to buy more than we sell from cur1 otherwise the fees make it disappear)
 
                             // reduce amountSellCur1 if we don't have enough money to buy
-                            //double likeToSellCur1 = amountSellCur1;
+                            double amountBuyCur1 = amountSellCur1 * 1.0042; // todo const. use 2xfee
+
                             if (amountSellCur1*priceBuy >= moneyToBuyCur2) {
                                 amountSellCur1 = moneyToBuyCur2 / priceBuy;
+                                amountBuyCur1 = amountSellCur1 * 1.0042;
+                            }
+                            // is amountBuy too high?
+                            if (amountBuyCur1 > maxAmountBuy) {
+                                // correct amountSellCur1
+                                amountSellCur1 = maxAmountBuy / 1.0042;
+                                amountBuyCur1 = amountSellCur1 * 1.0042; // there might be small rounding errors here but it should be neglectable
                             }
 
                             // determine min amounts to buy/sell:
@@ -302,7 +321,6 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             // todo check minValues (amount*price) as well
                             if (amountSellCur1>= minAmount) {
                                 QString str;
-                                double amountBuyCur1 = amountSellCur1 * 1.0042; // todo const. use 2xfee
 
                                 str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(eSell._cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(eSell._cur2).arg(eSell._name);
                                 _lastStatus.append(str);
