@@ -181,12 +181,24 @@ void ExchangeBinance::triggerAccountInfo()
                            [this](QNetworkReply *reply) {
                            bool wasAuth = _isAuth;
         _isAuth = false;
+        QByteArray arr = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
-                           assert(false);
+            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+                           // check for codes here:
+                           // ignore code -1021, Timestamp out of recv window
+                           QJsonDocument d = QJsonDocument::fromJson(arr);
+                           if (d.isObject()) {
+                            switch(d.object()["code"].toInt()){
+                            case -1021: // ignore retrigger will fix it
+                                break;
+                           default:
+                            qWarning() << __PRETTY_FUNCTION__ << "unknown code!" << d.object();
+                           break;
+                           }
+                           } else
+                           qWarning() << __PRETTY_FUNCTION__ << "unexpected answer" << d << arr;
             return;
         }
-        QByteArray arr = reply->readAll();
         QJsonDocument d = QJsonDocument::fromJson(arr);
         if (d.isObject()) {
             _accountInfo = d.object();
