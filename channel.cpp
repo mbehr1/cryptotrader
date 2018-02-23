@@ -307,10 +307,13 @@ void ChannelBooks::handleSingleEntry(const double &price, const int &count, cons
     }
 }
 
-bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double &limit) const
+bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double &limit, double *maxAmount) const
 {
     const BookItemMap &map = ask ? _asks : _bids;
-    if (amount <= 0.0) return false;
+    if (amount <= 0.0) {
+        if (maxAmount) *maxAmount = 0.0;
+        return false;
+    }
     //printAsksBids();
     // go through the map until enough amount is available:
     double volume = 0.0;
@@ -332,12 +335,15 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
         avg = volume / gotAmount;
         limit = retLimit;
         //qDebug() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "=" << avg << limit;
+        if (maxAmount) *maxAmount = gotAmount; // this is not quite right...
         return true;
     } else {
         qWarning() << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
-        for (const auto &item : ask ? _asks : _bids) {
+        if (0) for (const auto &item : ask ? _asks : _bids) {
             qDebug() << item.second._price << item.second._count << item.second._amount;
         }
+        if (maxAmount)
+            *maxAmount = gotAmount;
         return false; // not possible
     }
 }

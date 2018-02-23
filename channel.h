@@ -58,7 +58,7 @@ public:
     virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;
     virtual bool handleDataFromBinance(const QJsonObject &data, bool complete) override;
 
-    bool getPrices(bool ask, const double &amount, double &avg, double &limit) const; // determine at which price I could see the amount
+    bool getPrices(bool ask, const double &amount, double &avg, double &limit, double *maxAmount=0) const; // determine at which price I could see the amount
 
     class BookItem
     {
