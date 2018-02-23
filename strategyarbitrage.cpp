@@ -185,7 +185,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
     // csv handling:
     // we want a output: e1 bid, e1 ask, e2 bid, e2 ask,...
-    {
+    if(0){
         // let's do simply an additional loop. not efficient, but for now easier:
         _csvStream << QDateTime::currentDateTime().toString("dd.MM.yy hh:mm:ss") << ',';
         for (const auto &e: _exchgs) {
@@ -270,7 +270,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         ExchgData &eBuy = iBuy == 0 ? e1 : e2;
                         ExchgData &eSell = iBuy == 0 ? e2 : e1;
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
-                        _lastStatus.append(QString("\nbuy %1 %6 at %2%6, sell %3 at %4%7, delta %5%")
+                        _lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
                                            .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
                                            .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
 
