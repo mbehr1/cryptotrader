@@ -39,6 +39,10 @@ private Q_SLOTS:
     void onWsDisconnected(); // from _ws
     void onWsSslErrors(const QList<QSslError> &errors); // from _ws
     void onWsTextMessageReceived(const QString &msg); // from _ws
+    void onWs2Connected(); // from _ws2
+    void onWs2Disconnected(); // from _ws2
+    void onWs2SslErrors(const QList<QSslError> &errors); // from _ws2
+    void onWs2TextMessageReceived(const QString &msg); // from _ws2
 
 protected:
     virtual bool finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData) override;
@@ -50,6 +54,8 @@ protected:
     int _nrChannels;
 
     QWebSocket _ws;
+    QWebSocket _ws2; // for listenkey
+    bool _isConnectedWs2;
     void checkConnectWS();
     void disconnectWS();
 

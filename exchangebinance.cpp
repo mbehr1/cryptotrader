@@ -12,7 +12,7 @@
 
 ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebinance")
-  , _nrChannels(0)
+  , _nrChannels(0), _isConnectedWs2(false)
 {
     qDebug() << __PRETTY_FUNCTION__ << name();
 
@@ -32,6 +32,11 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
     assert(connect(&_ws, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBinance::onWsSslErrors));
     assert(connect(&_ws, SIGNAL(textMessageReceived(QString)), this, SLOT(onWsTextMessageReceived(QString))));
 
+    assert(connect(&_ws2, &QWebSocket::connected, this, &ExchangeBinance::onWs2Connected));
+    assert(connect(&_ws2, &QWebSocket::disconnected, this, &ExchangeBinance::onWs2Disconnected));
+    assert(connect(&_ws2, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBinance::onWs2SslErrors));
+    assert(connect(&_ws2, SIGNAL(textMessageReceived(QString)), this, SLOT(onWs2TextMessageReceived(QString))));
+
     assert(connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer())));
     _queryTimer.setSingleShot(false);
     _queryTimer.start(5000); // each 5ss
@@ -46,6 +51,7 @@ ExchangeBinance::~ExchangeBinance()
     _queryTimer.stop();
 
     disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBinance::onWsDisconnected);
+    disconnect(&_ws2, &QWebSocket::disconnected, this, &ExchangeBinance::onWs2Disconnected);
 
     storePendingOrders();
     // todo delete listen key. DELETE /api/v1/userDataStream
@@ -85,7 +91,7 @@ void ExchangeBinance::onQueryTimer()
 {
     keepAliveListenKey();
     checkConnectWS();
-    triggerAccountInfo(); // update balances. todo until we find out why ws is not working
+    //triggerAccountInfo(); // update balances. todo until we find out why ws is not working
 
     for (const auto &symbol : _subscribedChannels) {
         triggerGetMyTrades(symbol.first); // expensive w5
@@ -234,8 +240,11 @@ void ExchangeBinance::updateBalances(const QJsonArray &arr)
             if (bal.isObject()) {
                 const auto &b = bal.toObject();
                 //qDebug() << "b=" << b << b["free"] << b["locked"] << b["asset"];
-                if (b["free"].toString().toDouble() != 0.0 || b["locked"].toString().toDouble() != 0.0)
-                    qDebug() << " " << b["asset"].toString() << b["free"].toString() << b["locked"].toString();
+                // we have either "free"/"locked"/"asset" or "b"/"f"/"l":
+                bool shortFormat = b.contains("a");
+
+                if (b[shortFormat ? "f" : "free"].toString().toDouble() != 0.0 || b[shortFormat ? "l" : "locked"].toString().toDouble() != 0.0)
+                    qDebug() << " " << b[shortFormat ? "a" : "asset"].toString() << b[shortFormat ? "f" : "free"].toString() << b[shortFormat ? "l" : "locked"].toString();
             } else qDebug() << bal;
         }
     } else {
@@ -248,18 +257,20 @@ void ExchangeBinance::updateBalances(const QJsonArray &arr)
             // compare each:
             for (const auto &bo : arr) {
                 const QJsonObject &b = bo.toObject();
-                if (b.contains("asset")) {
-                    QString asset = b["asset"].toString();
-                    double bFree = b["free"].toString().toDouble();
-                    double bLocked = b["locked"].toString().toDouble();
+                if (b.contains("asset")||b.contains("a") ) {
+                    bool bShortFormat = b.contains("a");
+                    QString asset = b[bShortFormat ? "a" : "asset"].toString();
+                    double bFree = b[bShortFormat ? "f" : "free"].toString().toDouble();
+                    double bLocked = b[bShortFormat ? "l" : "locked"].toString().toDouble();
                     // search this currency:
                     // this has O(n2) but doesn't matter as it's still quite small...
                     bool found = false;
                     for (const auto &ao : _meBalances) {
                         const QJsonObject &a = ao.toObject();
-                        if (a["asset"] == asset) {
-                            double aFree = a["free"].toString().toDouble();
-                            double aLocked = a["locked"].toString().toDouble();
+                        bool aShortFormat = a.contains("a");
+                        if (a[aShortFormat ? "a" : "asset"] == asset) {
+                            double aFree = a[aShortFormat ? "f" : "free"].toString().toDouble();
+                            double aLocked = a[aShortFormat ? "l" : "locked"].toString().toDouble();
                             if (aFree != bFree) {
                                 double delta = bFree - aFree;
                                 emit walletUpdate(name(), "free", asset, bFree, delta);
@@ -561,18 +572,23 @@ void ExchangeBinance::checkConnectWS()
     // do we have a valid listenKey?
     if (_listenKey.length()) {
         // are we connected?
-        if (!_isConnected) {
-            qDebug() << __PRETTY_FUNCTION__ << "connecting to wss";
-            QString streams;
-            streams.append(_listenKey);
-            for (const auto &symb : _subscribedChannels) {
-                streams.append(QString("/%1@depth20").arg(symb.first.toLower())); // for book updates
-                streams.append(QString("/%1@trade").arg(symb.first.toLower())); // for trade updates
-            }
-            //QString url = QString("wss://stream.binance.com:9443/ws/%1").arg(_listenKey);
-            QString url = QString("wss://stream.binance.com:9443/stream?streams=%1").arg(streams);
-            _ws.open(QUrl(url));
+        if (!_isConnectedWs2) {
+            qDebug() << __PRETTY_FUNCTION__ << "connecting to ws2";
+            QString url = QString("wss://stream.binance.com:9443/ws/%1").arg(_listenKey);
+            _ws2.open(QUrl(url));
         }
+    }
+    // normal ones
+    if (!_isConnected) {
+        qDebug() << __PRETTY_FUNCTION__ << "connecting to ws1";
+        QString streams;
+        for (const auto &symb : _subscribedChannels) {
+            if (streams.length()) streams.append("/");
+            streams.append(QString("%1@depth20").arg(symb.first.toLower())); // for book updates
+            streams.append(QString("/%1@trade").arg(symb.first.toLower())); // for trade updates
+        }
+        QString url = QString("wss://stream.binance.com:9443/stream?streams=%1").arg(streams);
+        _ws.open(QUrl(url));
     }
 }
 
@@ -584,11 +600,21 @@ void ExchangeBinance::onWsSslErrors(const QList<QSslError> &errors)
     }
 }
 
+void ExchangeBinance::onWs2SslErrors(const QList<QSslError> &errors)
+{
+    qDebug() << __PRETTY_FUNCTION__;
+    for (const auto &err : errors) {
+        qDebug() << " " << err.errorString() << err.error();
+    }
+}
+
 void ExchangeBinance::disconnectWS()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
-    if (!_isConnected) return;
-    _ws.close();
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected << _isConnectedWs2;
+    if (_isConnected)
+        _ws.close();
+    if (_isConnectedWs2)
+        _ws2.close();
 }
 
 void ExchangeBinance::onWsConnected()
@@ -596,6 +622,15 @@ void ExchangeBinance::onWsConnected()
     qDebug() << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) return;
     _isConnected = true;
+}
+
+void ExchangeBinance::onWs2Connected()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2;
+    if (_isConnectedWs2) return;
+    _isConnectedWs2 = true;
+    // let's trigger initial balances here so that we get it in case of reconnect as well (and not just on update that we might have missed due to being disconnected)
+    triggerAccountInfo();
 }
 
 void ExchangeBinance::onWsDisconnected()
@@ -606,9 +641,18 @@ void ExchangeBinance::onWsDisconnected()
     }
 }
 
+void ExchangeBinance::onWs2Disconnected()
+{
+    qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2;
+    if (_isConnectedWs2) {
+        _isConnectedWs2 = false;
+    }
+}
+
+
 void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
 {
-//    qDebug() << __PRETTY_FUNCTION__ << msg;
+    //qDebug() << __PRETTY_FUNCTION__ << msg;
     QJsonParseError err;
     QJsonDocument d = QJsonDocument::fromJson(msg.toUtf8(), &err);
     if (d.isNull() || err.error != QJsonParseError::NoError) {
@@ -645,6 +689,39 @@ void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
                 }
             }
     }
+}
+
+void ExchangeBinance::onWs2TextMessageReceived(const QString &msg)
+{
+    //qDebug() << __PRETTY_FUNCTION__ << msg; // {\"e\":\"outboundAccountInfo\",\"E\":1519492960683,\"m\":10,\"t\":10,\"b\":0,\"s\":0,\"T\":true,\"W\":true,\"D\":true,\"u\":1519492960682,\"B\":[{\"a\":\"BTC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"LTC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ETH\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BNC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ICO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NEO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"OST\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ELF\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"AION\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"WINGS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BRD\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NEBL\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NAV\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"VIBE\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"LUN\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"TRIG\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"APPC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"CHAT\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"RLC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"INS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"PIVX\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"IOST\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"STEEM\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NANO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"AE\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"VIA\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BLZ\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"SYS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"RPX\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"}]}
+    QJsonParseError err; // todo handle above msgs,
+    // todo handle 24h reconnect case
+    QJsonDocument d = QJsonDocument::fromJson(msg.toUtf8(), &err);
+    if (d.isNull() || err.error != QJsonParseError::NoError) {
+        qWarning() << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error << msg;
+    } else if (d.isObject()) {
+        const QJsonObject &obj = d.object();
+        if (obj.contains("e")) {
+            // event type:
+            const QString &event = obj["e"].toString();
+            qDebug() << __PRETTY_FUNCTION__ << event << obj;
+            if (event == "outboundAccountInfo") {
+                // todo use more info from here!
+
+                // account info
+                if (obj.contains("B"))
+                    updateBalances(obj["B"].toArray());
+            } else if (event == "executionReport") {
+                // order update
+                // todo
+            } else {
+                qWarning() << __PRETTY_FUNCTION__ << "unknown event" << event;
+            }
+        }
+    } else {
+        qWarning() << __PRETTY_FUNCTION__ << "unexpected msg" << msg << d;
+    }
+    // todo
 }
 
 bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount, bool makerFee)
@@ -747,18 +824,19 @@ void ExchangeBinance::onChannelTimeout(int id, bool isTimeout)
 
 QString ExchangeBinance::getStatusMsg() const
 {
-    QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected ? "CO" : "not connected!")
+    QString toRet = QString("Exchange %3 (%1 %2):").arg(_isConnected && _isConnectedWs2 ? "CO" : "not connected!")
             .arg(_isAuth ? "AU" : "not authenticated!").arg(name());
 
     // add balances:
     for (const auto &bal : _meBalances) {
         if (bal.isObject()) {
             const auto &b = bal.toObject();
-            if (b["free"].toString().toDouble() != 0.0 || b["locked"].toString().toDouble() != 0.0)
+            bool shortFormat = b.contains("a");
+            if (b[shortFormat ? "f" : "free"].toString().toDouble() != 0.0 || b[shortFormat ? "l" : "locked"].toString().toDouble() != 0.0)
                 toRet.append(QString("\n%1: %2 (+l=%3)")
-                             .arg(b["asset"].toString())
-                        .arg(b["free"].toString().toDouble())
-                        .arg(b["locked"].toString().toDouble())
+                             .arg(b[shortFormat ? "a" : "asset"].toString())
+                        .arg(b[shortFormat ? "f" : "free"].toString().toDouble())
+                        .arg(b[shortFormat ? "l" : "locked"].toString().toDouble())
                         );
         }
     }

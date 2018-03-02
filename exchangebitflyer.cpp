@@ -220,7 +220,9 @@ void ExchangeBitFlyer::onPnOutcome(pubnub_res result, const QString &pair)
         }
     } else {
         qDebug() << __PRETTY_FUNCTION__ << pair << result << pubnub_res_2_string(result) << pn.first->last_http_code();
-        pn.second->start(500); // try again in 500ms
+        if (result != PNR_STARTED)
+            pn.second->start(500); // try again in 500ms
+        else qWarning() << __PRETTY_FUNCTION__ << pair << result << "PNR_STARTED. Didn't retrigger timer!";
     }
 }
 
