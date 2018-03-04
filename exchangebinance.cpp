@@ -504,8 +504,25 @@ void ExchangeBinance::keepAliveListenKey()
         QByteArray postData = QString("listenKey=%1").arg(_listenKey).toUtf8();
         if (!triggerApiRequest(path, false, PUT, &postData,
                                [this](QNetworkReply *reply) {
+            QByteArray arr = reply->readAll();
+            QJsonDocument d = QJsonDocument::fromJson(arr);
             if (reply->error() != QNetworkReply::NoError) {
-                qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+                if (d.isObject() && d.object().contains("code")) {
+                    int code = d.object()["code"].toInt();
+                    switch(code) {
+                    case -1125: // the listen key does not exist (e.g. after 24h)
+                               qDebug() << __PRETTY_FUNCTION__ << "code -1125: deleting listenkey. ws2 connected=" << _isConnectedWs2;
+                               if (_isConnectedWs2){
+                                    _ws2.close();
+                                    _isConnectedWs2 = false;
+                                }
+                               _listenKey.clear(); // will be created on next call
+                               break;
+                    default:
+                               qWarning() << __PRETTY_FUNCTION__ << "didn't handle code" << code << d;
+                    }
+                }
+                qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
                 return;
             }
             _listenKeyCreated = QDateTime::currentDateTime();
