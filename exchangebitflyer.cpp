@@ -71,6 +71,7 @@ bool ExchangeBitFlyer::addPair(const QString &pair)
     _subscribedChannels[pair] = std::make_pair(chb, ch);
 
     auto timer = std::make_shared<QTimer>(this);
+    timer->setSingleShot(true);
     // connect(timer.get(), SIGNAL(timeout()),this, SLOT(onTimerTimeout()));
     connect(timer.get(), &QTimer::timeout, this, [this, pair]{onTimerTimeout(pair);});
 
