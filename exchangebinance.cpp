@@ -12,7 +12,7 @@
 
 ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebinance")
-  , _nrChannels(0), _isConnectedWs2(false)
+  , _nrChannels(0), _ws2LastPong(0), _isConnectedWs2(false)
 {
     qDebug() << __PRETTY_FUNCTION__ << name();
 
@@ -36,6 +36,8 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
     assert(connect(&_ws2, &QWebSocket::disconnected, this, &ExchangeBinance::onWs2Disconnected));
     assert(connect(&_ws2, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBinance::onWs2SslErrors));
     assert(connect(&_ws2, SIGNAL(textMessageReceived(QString)), this, SLOT(onWs2TextMessageReceived(QString))));
+    assert(connect(&_ws2, SIGNAL(pong(quint64,QByteArray)), this, SLOT(onWs2Pong(quint64, QByteArray))));
+    assert(connect(&_ws2, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWs2Error(QAbstractSocket::SocketError))));
 
     assert(connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer())));
     _queryTimer.setSingleShot(false);
@@ -593,6 +595,16 @@ void ExchangeBinance::checkConnectWS()
             qDebug() << __PRETTY_FUNCTION__ << "connecting to ws2";
             QString url = QString("wss://stream.binance.com:9443/ws/%1").arg(_listenKey);
             _ws2.open(QUrl(url));
+        } else {
+            auto curTimeMs = QDateTime::currentMSecsSinceEpoch();
+            if (_ws2LastPong && (curTimeMs - _ws2LastPong > 12*1000) ) { // todo const. 12s for now.
+                qWarning() << __PRETTY_FUNCTION__ << "no pong from ws2 since " << (curTimeMs - _ws2LastPong) << "ms";
+                // disconnect ws2:
+                _ws2.close(QWebSocketProtocol::CloseCodeGoingAway);
+                _isConnectedWs2 = false;
+            }
+            // we trigger a new ping anyhow
+            _ws2.ping();
         }
     }
     // normal ones
@@ -645,6 +657,7 @@ void ExchangeBinance::onWs2Connected()
 {
     qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2;
     if (_isConnectedWs2) return;
+    _ws2LastPong = 0; // none yet, otherwise the last valid pong but might be far too far away...
     _isConnectedWs2 = true;
     // let's trigger initial balances here so that we get it in case of reconnect as well (and not just on update that we might have missed due to being disconnected)
     triggerAccountInfo();
@@ -652,7 +665,7 @@ void ExchangeBinance::onWs2Connected()
 
 void ExchangeBinance::onWsDisconnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    qDebug() << __PRETTY_FUNCTION__ << _isConnected << _ws.closeReason();
     if (_isConnected) {
         _isConnected = false;
     }
@@ -660,11 +673,25 @@ void ExchangeBinance::onWsDisconnected()
 
 void ExchangeBinance::onWs2Disconnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2;
+    qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2 << _ws2.closeReason();
     if (_isConnectedWs2) {
         _isConnectedWs2 = false;
     }
 }
+
+void ExchangeBinance::onWs2Pong(quint64 elapsedTime, const QByteArray &payload)
+{
+//    qDebug() << __PRETTY_FUNCTION__ << elapsedTime << payload;
+    (void) elapsedTime;
+    (void) payload;
+    _ws2LastPong = QDateTime::currentMSecsSinceEpoch();
+}
+
+void ExchangeBinance::onWs2Error(QAbstractSocket::SocketError err)
+{
+    qDebug() << __PRETTY_FUNCTION__ << err;
+}
+
 
 
 void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
