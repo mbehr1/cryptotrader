@@ -167,8 +167,8 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 {
     // can be: e.g. QJsonObject({"best_ask":0.13565,"best_ask_size":0.95429643,"best_bid":0.135,"best_bid_size":0.11,"ltp":0.13567,"product_code":"BCH_BTC","tick_id":682552,"timestamp":"2018-02-15T21:09:38.565998Z","total_ask_depth":483.08264031,"total_bid_depth":577.45185849,"volume":205.49892664,"volume_by_product":205.49892664})
     if (Channel::handleDataFromBitFlyer(data)) {
-        //if (_symbol == "BCH_BTC" && data["bids"].toArray().count()>0)
-            //qDebug() << __PRETTY_FUNCTION__ << data; // todo how to handle data after timeout? (we should remove old ones?)
+//        if (_symbol == "BCH_BTC" && (data["bids"].toArray().count()>0||data["asks"].toArray().count()>0))
+//            qDebug() << __PRETTY_FUNCTION__ << data; // todo how to handle data after timeout? (we should remove old ones?)
 
         if (data.contains("asks")) {
             // process asks
@@ -220,16 +220,40 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 
         // check for ticker based updates: this deletes complete orderbook
         if (data.contains("tick_id")) {
+//            if (_symbol == "BCH_BTC")
+//                qDebug() << __PRETTY_FUNCTION__ << data;
             // use best_bid / best_bid_size
             double price = data["best_bid"].toDouble();
             double amount = data["best_bid_size"].toDouble();
-            _bids.clear();
-            _bids.insert(std::make_pair(price, BookItem(price, 1, amount)));
+
+            if (_bids.size() == 1 )
+                _bids.clear();
+
+            // check whether best_bid is greater than bids?
+            while (_bids.begin() != _bids.end() && ( price > _bids.begin()->first))
+                _bids.erase(_bids.begin());
+
+            if ((_bids.cbegin() != _bids.cend()) &&
+                    (price == _bids.cbegin()->first)) {
+                _bids.begin()->second._amount = amount;
+            } else
+                _bids.insert(std::make_pair(price, BookItem(price, 1, amount)));
             // and best_ask / best_ask_size
             price = data["best_ask"].toDouble();
             amount = data["best_ask_size"].toDouble();
-            _asks.clear();
-            _asks.insert(std::make_pair(price, BookItem(price, 1, -amount)));
+
+            if (_asks.size()==1) // we simply replace in this case
+                _asks.clear();
+
+            // check whether best_ask is smaller than asks?
+            while (_asks.begin() != _asks.end() && ( price < _asks.begin()->first))
+                _asks.erase(_asks.begin());
+
+            if ((_asks.cbegin() != _asks.cend()) &&
+                    (price == _asks.cbegin()->first)) {
+                _asks.begin()->second._amount = -amount;
+            } else
+                _asks.insert(std::make_pair(price, BookItem(price, 1, -amount)));
         }
 
         emit dataUpdated();

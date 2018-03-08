@@ -289,7 +289,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             // do we have cur2 at eBuy
                             // do we have cur1 at eSell
                             double moneyToBuyCur2 = eBuy._availCur2;
-                            double amountSellCur1 = std::min(maxAmountSell, eSell._availCur1);
+                            double amountSellCur1 = std::min(maxAmountSell, (eSell._availCur1/1.0021)); // at sell some exchanges take the fee from the cur to sell! todo assume 0.2% here
 
                             // do we have to take fees into consideration? the 1% (todo const) needs to be high enough to compensate for both fees!
                             // yes, we do. See below (we need to buy more than we sell from cur1 otherwise the fees make it disappear)
