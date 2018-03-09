@@ -28,7 +28,7 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
     // snapshot seems to come every 240s
     _subscribedChannelNames["FX_BTC_JPY"] = "lightning_board_FX_BTC_JPY,lightning_executions_FX_BTC_JPY";
     _subscribedChannelNames["ETH_BTC"] = "lightning_ticker_ETH_BTC,lightning_executions_ETH_BTC";
-    _subscribedChannelNames["BCH_BTC"] = "lightning_board_BCH_BTC,lightning_ticker_BCH_BTC,lightning_executions_BCH_BTC"; // let's try using the ticker only. so we get just the first ask/bid
+    _subscribedChannelNames["BCH_BTC"] = "lightning_ticker_BCH_BTC,lightning_executions_BCH_BTC"; // todo needs more time to investigate in correctness "lightning_board_BCH_BTC,lightning_ticker_BCH_BTC,lightning_executions_BCH_BTC"; // let's try using the ticker only. so we get just the first ask/bid
 
     loadPendingOrders();
 
