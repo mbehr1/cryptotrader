@@ -519,7 +519,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
     auto it = waitForFundsUpdateMap.find(cid);
     if (it != waitForFundsUpdateMap.end()) {
         FundsUpdateMapEntry &entry = it->second;
-        qDebug() << "order complete waiting for " << entry._id << entry._amount << entry._price << entry._tradePair << " got " << amount << price;
+        qDebug() << "order complete waiting for (cid" << cid << "):" << entry._id << entry._amount << entry._price << entry._tradePair << " got " << amount << price;
         // update only the strategy with proper id
         for (auto &strategy : _strategies) {
             if (strategy && strategy->id() == entry._id) {
@@ -531,11 +531,11 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
                 }
             }
         }
-        const QString botMsg = QString("order completed %5 (cid %3): %1 *%6* at %2 (%4) fee %7 %8")
+        const QString botMsg = QString("order completed %5 (cid %3): %1 %6 at %2 (%4) fee %7 %8")
                 .arg(amount).arg(price).arg(cid).arg(status).arg(entry._id).arg(entry._tradePair).arg(fee).arg(feeCur);
 
         it = waitForFundsUpdateMap.erase(it);
-        qDebug() << __PRETTY_FUNCTION__ << "waitForFundsUpdateMap.size=" << waitForFundsUpdateMap.size();
+        qDebug() << __PRETTY_FUNCTION__ << "waitForFundsUpdateMap.size=" << waitForFundsUpdateMap.size() << botMsg;
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
