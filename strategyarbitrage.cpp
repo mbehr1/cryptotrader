@@ -370,7 +370,10 @@ void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double p
                 qWarning() << __PRETTY_FUNCTION__ << _id << QString("ignoring fee %1 %2 due to different cur.").arg(fee).arg(feeCur);
             }
         }
-        e._waitForOrder = false;
+        if (amount == 0.0 && fee == 0.0) {
+            qWarning() << __PRETTY_FUNCTION__ << _id << "please investigate! failed order? keeping wait for order";
+        } else
+            e._waitForOrder = false;
 
         if (e._availCur1 < 0.0) e._availCur1 = 0.0;
         if (e._availCur2 < 0.0) e._availCur2 = 0.0;
