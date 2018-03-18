@@ -6,11 +6,14 @@
 #include <QNetworkAccessManager>
 #include <QJsonArray>
 #include <QDateTime>
+#include <QLoggingCategory>
 #include "exchangenam.h"
 #include "pubnub_api_types.h"
 #include "channel.h"
 
 static QString bitFlyerName = "bitFlyer";
+
+Q_DECLARE_LOGGING_CATEGORY(CbitFlyer)
 
 class pubnub_qt;
 

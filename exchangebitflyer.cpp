@@ -19,11 +19,13 @@ extern "C" {
 #include "pubnub_helper.h"
 }
 
+Q_LOGGING_CATEGORY(CbitFlyer, "exchg.bitFlyer")
+
 ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebitflyer")
   , _nrChannels(0)
 {
-    qDebug() << __PRETTY_FUNCTION__ << name();
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << name();
 
     // snapshot seems to come every 240s
     _subscribedChannelNames["FX_BTC_JPY"] = "lightning_board_FX_BTC_JPY,lightning_executions_FX_BTC_JPY";
@@ -81,9 +83,9 @@ bool ExchangeBitFlyer::addPair(const QString &pair)
 
     connect(&(*pn), &pubnub_qt::outcome, this, [this, pair](pubnub_res res){ onPnOutcome(res, pair);} );
 
-    qDebug() << "pubnub origin=" << pn->origin() << pair;
+    qCDebug(CbitFlyer) << "pubnub origin=" << pn->origin() << pair;
     auto res = pn->subscribe(_subscribedChannelNames[pair]);
-    qDebug() << "subscribe " << pair << " res=" << res << "success=" << (res==PNR_STARTED);
+    qCDebug(CbitFlyer) << "subscribe " << pair << " res=" << res << "success=" << (res==PNR_STARTED);
 
     _pns[pair] = std::make_pair(pn, timer);
     return true;
@@ -108,7 +110,7 @@ void ExchangeBitFlyer::loadPendingOrders()
             }
         }
     }
-    qDebug() << __PRETTY_FUNCTION__ << "loaded" << _pendingOrdersMap.size() << "pending orders";
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "loaded" << _pendingOrdersMap.size() << "pending orders";
 }
 
 void ExchangeBitFlyer::storePendingOrders()
@@ -130,7 +132,7 @@ void ExchangeBitFlyer::storePendingOrders()
 
 ExchangeBitFlyer::~ExchangeBitFlyer()
 {
-    qDebug() << __PRETTY_FUNCTION__ << name();
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << name();
     // stop all timer:
     for (auto &pn : _pns) {
         if (pn.second.second)
@@ -163,10 +165,10 @@ bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, do
             feeCur1 = (*it).second;
             feeCur2 = 0.0;
         }
-        qWarning() << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning true";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning true";
         return true;
     }
-    qWarning() << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning false!";
+    qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning false!";
     return false;
 }
 
@@ -202,7 +204,7 @@ std::shared_ptr<Channel> ExchangeBitFlyer::getChannel(const QString &pair, CHANN
 
 void ExchangeBitFlyer::onChannelTimeout(int id, bool isTimeout)
 {
-    qWarning() << __PRETTY_FUNCTION__ << id << isTimeout;
+    qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << id << isTimeout;
     emit channelTimeout(name(), id, isTimeout);
 }
 
@@ -218,14 +220,14 @@ void ExchangeBitFlyer::onPnOutcome(pubnub_res result, const QString &pair)
         }
         auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
         if (res != PNR_STARTED) {
-            qDebug() << pair << "subscribe res=" << res << pubnub_res_2_string(res);
+            qCDebug(CbitFlyer) << pair << "subscribe res=" << res << pubnub_res_2_string(res);
             pn.second->start(500); // try again in 500ms
         }
     } else {
-        qDebug() << __PRETTY_FUNCTION__ << pair << result << pubnub_res_2_string(result) << pn.first->last_http_code();
+        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << result << pubnub_res_2_string(result) << pn.first->last_http_code();
         if (result != PNR_STARTED)
             pn.second->start(500); // try again in 500ms
-        else qWarning() << __PRETTY_FUNCTION__ << pair << result << "PNR_STARTED. Didn't retrigger timer!";
+        else qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << pair << result << "PNR_STARTED. Didn't retrigger timer!";
     }
 }
 
@@ -238,7 +240,7 @@ void ExchangeBitFlyer::onTimerTimeout(const QString &pair)
         processMsg(pair, msg);
     }
     auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
-    qDebug() << "subscribe " << pair << " res=" << res << "success=" << pubnub_res_2_string(res);
+    qCDebug(CbitFlyer) << "subscribe " << pair << " res=" << res << "success=" << pubnub_res_2_string(res);
 }
 
 bool ExchangeBitFlyer::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)
@@ -261,14 +263,14 @@ bool ExchangeBitFlyer::finishApiRequest(QNetworkRequest &req, QUrl &url, bool do
             authPayload.append("POST");
             break;
         default:
-            qWarning() << __PRETTY_FUNCTION__ << "unknown reqtype" << (int)reqType;
+            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "unknown reqtype" << (int)reqType;
             return false;
             break;
         }
         authPayload.append(path);
         if (postData)
             authPayload.append(*postData);
-        //qDebug() << __FUNCTION__ << authPayload << url;
+        //qCDebug(CbitFlyer) << __FUNCTION__ << authPayload << url;
         QByteArray sign = QMessageAuthenticationCode::hash(authPayload, _sKey.toUtf8(), QCryptographicHash::Sha256).toHex();
         req.setRawHeader(QByteArray("ACCESS-KEY"), _apiKey.toUtf8());
         req.setRawHeader(QByteArray("ACCESS-TIMESTAMP"), timeStamp);
@@ -285,7 +287,7 @@ void ExchangeBitFlyer::triggerGetHealth()
     if (!triggerApiRequest(path, false, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        return;
                                    }
                                    QByteArray arr = reply->readAll();
@@ -293,7 +295,7 @@ void ExchangeBitFlyer::triggerGetHealth()
                                    if (d.isObject()) {
                                     QString health = d.object()["status"].toString();
                                     if (health != _health) {
-                                       // qDebug() << __PRETTY_FUNCTION__ << "got health=" << health; // NORMAL, BUSY, VERY BUSY, SUPER BUSY, STOP
+                                       // qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "got health=" << health; // NORMAL, BUSY, VERY BUSY, SUPER BUSY, STOP
                                        bool wasMaintenance = health.compare("STOP")==0;
                                        bool wasStopped = wasMaintenance;
                                        bool first = _health.length() == 0;
@@ -304,12 +306,12 @@ void ExchangeBitFlyer::triggerGetHealth()
                                         emit exchangeStatus(name(), isMaintenance, isStopped);
                                     }
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from gethealth" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from gethealth" << d;
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 
 }
@@ -321,7 +323,7 @@ void ExchangeBitFlyer::triggerAuth()
     if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        _isAuth = false;
                                        return;
                                    }
@@ -330,18 +332,18 @@ void ExchangeBitFlyer::triggerAuth()
                                    if (d.isArray()) {
                                     _isAuth = true;
                                     _mePermissions = d.array();
-                                    qDebug() << __PRETTY_FUNCTION__ << "got auth permissions=" << _mePermissions;
+                                    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "got auth permissions=" << _mePermissions;
                                     triggerCheckCommissions("FX_BTC_JPY");
                                     triggerCheckCommissions("ETH_BTC");
                                     triggerCheckCommissions("BCH_BTC");
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from getpermissions" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from getpermissions" << d;
                                         _isAuth = false;
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
@@ -353,14 +355,14 @@ void ExchangeBitFlyer::triggerCheckCommissions(const QString &pair)
     if (!triggerApiRequest(path, true, GET, 0,
                                               [this, pair](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        emit subscriberMsg(QString("couldn't get commission! (%1 %2)").arg(reply->error()).arg(QString(reply->readAll())));
                                        return;
                                    }
                                    QByteArray arr = reply->readAll();
                                    QJsonDocument d = QJsonDocument::fromJson(arr);
                                    if (d.isObject()) {
-                                       qDebug() << __PRETTY_FUNCTION__ << "result from gettradingcommission" << d;
+                                       qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "result from gettradingcommission" << d;
                                        // check whether is for free
                                        if (d.object().contains("commission_rate")) {
                                             double rate = d.object()["commission_rate"].toDouble();
@@ -370,18 +372,18 @@ void ExchangeBitFlyer::triggerCheckCommissions(const QString &pair)
                                             }
 
                                        } else {
-                                            qDebug() << __PRETTY_FUNCTION__ << "wrong result from gettradingcommission" << d;
+                                            qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from gettradingcommission" << d;
                                             emit subscriberMsg(QString("couldn't get commission! (%1)").arg(QString(d.toJson())));
                                        }
 
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from gettradingcommission" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from gettradingcommission" << d;
                                         emit subscriberMsg(QString("couldn't get commission! (%1)").arg(QString(d.toJson())));
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
@@ -393,22 +395,22 @@ void ExchangeBitFlyer::triggerGetMargins()
     if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        return;
                                    }
                                    QByteArray arr = reply->readAll();
                                    QJsonDocument d = QJsonDocument::fromJson(arr);
 // QJsonDocument([{"amount":9002,"currency_code":"JPY"},{"amount":0,"currency_code":"BTC"}])
                                    if (d.isArray()) {
-                                       //qDebug() << __PRETTY_FUNCTION__ << "result from getcollateralaccounts" << d;
+                                       //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "result from getcollateralaccounts" << d;
                                        updateBalances(QString("margin"), d.array());
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from getcollateralaccounts" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from getcollateralaccounts" << d;
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 
 }
@@ -420,7 +422,7 @@ void ExchangeBitFlyer::triggerGetBalance()
     if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        return;
                                    }
                                    QByteArray arr = reply->readAll();
@@ -428,13 +430,13 @@ void ExchangeBitFlyer::triggerGetBalance()
                                    if (d.isArray()) {
                                     updateBalances(QString("exchange"), d.array());
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from getbalance" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from getbalance" << d;
                                         updateBalances(QString("exchange"), QJsonArray());
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
@@ -445,12 +447,12 @@ void ExchangeBitFlyer::updateBalances(const QString &type, const QJsonArray &arr
     if (_meBalances.isEmpty()) {
         // first time, just set it
         _meBalances = arr;
-        qDebug() << __PRETTY_FUNCTION__ << type << "got first set of balances=" << _meBalances;
+        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << type << "got first set of balances=" << _meBalances;
     } else {
         // check for changes:
         if (arr.isEmpty()) {
             _meBalances = arr;
-            qDebug() << __PRETTY_FUNCTION__ << "cleared balances" << _meBalances;
+            qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "cleared balances" << _meBalances;
         } else {
             // check for changes and emit walletUpdate
             // 1st check for changes
@@ -471,7 +473,7 @@ void ExchangeBitFlyer::updateBalances(const QString &type, const QJsonArray &arr
                                 double delta = hasAvailable ? (b["available"].toDouble() - a["available"].toDouble()) :
                                     (b["amount"].toDouble() - a["amount"].toDouble());
                                 emit walletUpdate(name(), QString("exchange"), b["currency_code"].toString(), bAmount, delta);
-                                qDebug() << __PRETTY_FUNCTION__ << "wallet update: " << b["currency_code"].toString() << bAmount << delta;
+                                qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wallet update: " << b["currency_code"].toString() << bAmount << delta;
                             }
                             found = true;
                             break;
@@ -479,10 +481,10 @@ void ExchangeBitFlyer::updateBalances(const QString &type, const QJsonArray &arr
                     }
                     if (!found) {
                         emit walletUpdate(name(), QString("exchange"), b["currency_code"].toString(), bAmount, bAmount);
-                        qDebug() << __PRETTY_FUNCTION__ << "wallet update: " << b["currency_code"].toString() << bAmount;
+                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wallet update: " << b["currency_code"].toString() << bAmount;
                     }
                 } else
-                    qWarning() << __PRETTY_FUNCTION__ << "wrong data! missing currency_code" << b;
+                    qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong data! missing currency_code" << b;
             }
             // 2nd check for removed ones! (and send 0 update) todo
 
@@ -498,7 +500,7 @@ void ExchangeBitFlyer::triggerGetExecutions()
     if (!triggerApiRequest(path, true, GET, 0,
                                               [this](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
                                        // we don't update executions here. _meOrders = QJsonArray();
                                        return;
                                    }
@@ -507,16 +509,16 @@ void ExchangeBitFlyer::triggerGetExecutions()
 // QJsonDocument([{"child_order_acceptance_id":"JRF20171124-153649-181288","child_order_id":"JOR20171124-153656-987091","commission":1.5e-05,"exec_date":"2017-11-24T15:36:56.483","id":75437908,"price":912612,"side":"SELL","size":0.01}])
 
                                    if (d.isArray()) {
-                                       qDebug() << __PRETTY_FUNCTION__ << "result from getexecutions" << d;
+                                       qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "result from getexecutions" << d;
                                        // updateOrders(d.array());
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from getexecutions" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from getexecutions" << d;
                                         // we don't update orders here _meOrders = QJsonArray();
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 
 }
@@ -531,7 +533,7 @@ void ExchangeBitFlyer::triggerGetOrders(const QString &pair)
     if (!triggerApiRequest(path, true, GET, 0,
                                               [this, pair](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
-                                       qCritical() << __PRETTY_FUNCTION__ << pair << reply->errorString() << reply->error() << reply->readAll();
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << pair << reply->errorString() << reply->error() << reply->readAll();
                                        // we don't update orders here. _meOrders = QJsonArray();
                                        return;
                                    }
@@ -540,20 +542,20 @@ void ExchangeBitFlyer::triggerGetOrders(const QString &pair)
                                    if (d.isArray()) {
                                     updateOrders(pair, d.array());
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << pair << "wrong result from getorders" << arr;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << "wrong result from getorders" << arr;
                                         // we don't update orders here _meOrders = QJsonArray();
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << pair << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << pair << "triggerApiRequest failed!";
     }
 }
 
 void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
 {
     if (arr == _meOrders[pair]) return;
-    qDebug() << __PRETTY_FUNCTION__ << pair << "got orders=" << arr.size();
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << "got orders=" << arr.size();
     _meOrders[pair] = arr;
 
     int nrActive = 0;
@@ -578,7 +580,7 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
                     if (pit != _pendingOrdersMap.end()) {
                         // got it! emit orderCompleted
                         int cid = (*pit).second;
-                        qDebug() << __PRETTY_FUNCTION__ << "found pending order" << "cid=" << cid << o;
+                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found pending order" << "cid=" << cid << o;
                         bool isSell = o["side"].toString().compare("SELL")==0;
                         double amount = o["executed_size"].toDouble(); // always pos here
                         if (isSell && amount >=0.0) amount = -amount;
@@ -587,23 +589,23 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
                         QString pair = o["product_code"].toString();
                         double fee = -o["total_commission"].toDouble(); // was 1.5e-05 for sell BTC_JPY (so feeCur = BTC)
                         QString feeCur; // todo
-                        qDebug() << __PRETTY_FUNCTION__ << "found pending order" << "cid=" << cid << o << amount << price << status << pair << fee << feeCur;
+                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found pending order" << "cid=" << cid << o << amount << price << status << pair << fee << feeCur;
                         emit orderCompleted(name(), cid, amount, price, status, pair, fee, feeCur);
                         _pendingOrdersMap.erase(pit);
                         storePendingOrders();
                     }
                 } else {
                     ++nrActive;
-                    qDebug() << __PRETTY_FUNCTION__ << "got active orders=" << o << arr.size();
+                    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "got active orders=" << o << arr.size();
                 }
 
-            } else qWarning() << __PRETTY_FUNCTION__ << "empty id" << o;
-        } else qWarning() << __PRETTY_FUNCTION__ << "no object: " << ao;
+            } else qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "empty id" << o;
+        } else qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "no object: " << ao;
     }
 
     // need to check whether there is any pending order that doesn't appear in orders any longer! (then we need to cancel it!)
     if (!nrActive && _pendingOrdersMap.size()) {
-        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << pair << _pendingOrdersMap.size();
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << pair << _pendingOrdersMap.size();
         // todo emit signal and delete them
     }
 
@@ -611,7 +613,7 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
 
 void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
 {
-    //qWarning() << __PRETTY_FUNCTION__ << pair << msg;
+    //qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << pair << msg;
     // check type of msgs.
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(msg.toLatin1(), &err);
@@ -626,7 +628,7 @@ void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
                     ch->handleDataFromBitFlyer(obj);
                 }
             } else {
-                qWarning() << __PRETTY_FUNCTION__ << "don't know how to process" << msg << obj;
+                qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "don't know how to process" << msg << obj;
             }
         } else {
             if (doc.isArray()) {
@@ -648,7 +650,7 @@ void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
                                     auto it = _pendingOrdersMap.find(buyId);
                                     if (it != _pendingOrdersMap.end()) {
                                         //  on buy: found our pending order as buyid. cid= 14 QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-221326-585479","exec_date":"2017-11-24T22:13:29.1301581Z","id":75526868,"price":940129,"sell_child_order_acceptance_id":"JRF20171125-071316-913089","side":"BUY","size":0.001})
-                                        qDebug() << __PRETTY_FUNCTION__ << "found our pending order as buyid. cid=" << (*it).second << obj; // todo process
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found our pending order as buyid. cid=" << (*it).second << obj; // todo process
                                         double amount = obj["size"].toDouble();
                                         double price = obj["price"].toDouble();
                                         QString status = "COMPLETED BUY WO FEE(MARGIN)";
@@ -658,7 +660,7 @@ void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
                                     } else {
                                         it = _pendingOrdersMap.find(sellId);
                                         if (it != _pendingOrdersMap.end()) {
-                                            qDebug() << __PRETTY_FUNCTION__ << "found our pending order as sellid. cid=" << (*it).second << obj; // todo process
+                                            qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found our pending order as sellid. cid=" << (*it).second << obj; // todo process
                                             double amount = -obj["size"].toDouble();
                                             double price = obj["price"].toDouble();
                                             QString status = "COMPLETED SELL WO FEE(MARGIN)";
@@ -671,17 +673,17 @@ void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
 
                             }
 
-                            //qDebug() << __PRETTY_FUNCTION__ << "trade=" << obj; //  QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-220553-114701","exec_date":"2017-11-24T22:05:56.4429062Z","id":75525642,"price":939002,"sell_child_order_acceptance_id":"JRF20171125-070447-314624","side":"BUY","size":0.071})
+                            //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "trade=" << obj; //  QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-220553-114701","exec_date":"2017-11-24T22:05:56.4429062Z","id":75525642,"price":939002,"sell_child_order_acceptance_id":"JRF20171125-070447-314624","side":"BUY","size":0.071})
                         } else
-                            qWarning() << __PRETTY_FUNCTION__ << "don't know how to process a with " << msg << obj;
+                            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "don't know how to process a with " << msg << obj;
                     } else
-                        qWarning() << __PRETTY_FUNCTION__ << "expect e as object" << e << arr;
+                        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "expect e as object" << e << arr;
                 }
             } else
-                qWarning() << __PRETTY_FUNCTION__ << "couldn't parse" << msg;
+                qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "couldn't parse" << msg;
         }
     } else
-        qWarning() << __PRETTY_FUNCTION__ << "couldn't parse" << msg << err.error << err.errorString();
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "couldn't parse" << msg << err.error << err.errorString();
 }
 
 QString ExchangeBitFlyer::getStatusMsg() const
@@ -711,13 +713,13 @@ QString ExchangeBitFlyer::getStatusMsg() const
 int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
     QString priceRounded = QString("%1").arg(price, 0, 'f', 5);
-    qDebug() << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden << "priceRounded=" << priceRounded;
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden << "priceRounded=" << priceRounded;
     if (!_isConnected) {
-        qWarning() << __FUNCTION__ << "not connected!";
+        qCWarning(CbitFlyer) << __FUNCTION__ << "not connected!";
         return -1;
     }
     if (!_isAuth) {
-        qWarning() << __FUNCTION__ << "not auth!";
+        qCWarning(CbitFlyer) << __FUNCTION__ << "not auth!";
         return -2;
     }
 
@@ -738,7 +740,7 @@ int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, cons
                                               [this, nextCid, symbol](QNetworkReply *reply) {
                                    if (reply->error() != QNetworkReply::NoError) {
                                         QByteArray arr = reply->readAll();
-                                       qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error() << arr;
+                                       qCCritical(CbitFlyer) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error() << arr;
                                        emit orderCompleted(name(), nextCid, 0.0, 0.0, QString(arr), symbol, 0.0, QString());
                            return;
                                    }
@@ -747,15 +749,15 @@ int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, cons
                                    if (d.isObject()) { // got sendchildorders( 8 )= {"child_order_acceptance_id":"JRF20171124-154651-846874"}
                                     _pendingOrdersMap[d.object()["child_order_acceptance_id"].toString()] = nextCid;
                                     storePendingOrders();
-                                    qDebug() << __PRETTY_FUNCTION__ << "got sendchildorders(" << nextCid << ")=" << d.object();
+                                    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "got sendchildorders(" << nextCid << ")=" << d.object();
                                    }else{
-                                        qDebug() << __PRETTY_FUNCTION__ << "wrong result from sendchildorders" << d;
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from sendchildorders" << d;
                                        emit orderCompleted(name(), nextCid, 0.0, 0.0, QString(d.toJson()), symbol, 0.0, QString());
                                    }
                                }
 
                                )) {
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 
     return nextCid;
