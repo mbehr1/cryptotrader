@@ -5,10 +5,13 @@
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QLoggingCategory>
 
 class Exchange;
 class ExchangeBitfinex;
 class Engine;
+
+Q_DECLARE_LOGGING_CATEGORY(Cchannel)
 
 class Channel : public QObject
 {
