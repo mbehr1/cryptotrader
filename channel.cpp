@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QJsonValueRef>
+#include <QTextStream>
 
 #include "channel.h"
 #include "exchange.h"
@@ -109,7 +110,8 @@ bool less(const double &a, const double &b)
 ChannelBooks::ChannelBooks(Exchange *exchange, int id, const QString &symbol) :
     Channel(exchange, id, QString("book"), symbol, QString()),
     _bids(greater),
-   _asks(less)
+   _asks(less),
+   _bitFlyerGotSnapshot(false)
 {
     qCDebug(Cchannel) << __PRETTY_FUNCTION__ << _id << _channel << _symbol;
 }
@@ -168,11 +170,32 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
 bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 {
     // can be: e.g. QJsonObject({"best_ask":0.13565,"best_ask_size":0.95429643,"best_bid":0.135,"best_bid_size":0.11,"ltp":0.13567,"product_code":"BCH_BTC","tick_id":682552,"timestamp":"2018-02-15T21:09:38.565998Z","total_ask_depth":483.08264031,"total_bid_depth":577.45185849,"volume":205.49892664,"volume_by_product":205.49892664})
+    bool didUpdate = false;
     if (Channel::handleDataFromBitFlyer(data)) {
-//        if (_symbol == "BCH_BTC" && (data["bids"].toArray().count()>0||data["asks"].toArray().count()>0))
-//            qCDebug(Cchannel) << __PRETTY_FUNCTION__ << data; // todo how to handle data after timeout? (we should remove old ones?)
+        auto cntBid = data["bids"].toArray().count();
+        auto cntAsk = data["asks"].toArray().count();
 
-        if (data.contains("asks")) {
+        // we assume a snapshot if we got more than 40 asks/bids
+        bool gotSnapshot = (cntBid > 40) || (cntAsk > 40);
+        if (gotSnapshot) {
+            // we clear the current book:
+            _bids.clear();
+            _asks.clear();
+            _bitFlyerGotSnapshot = true;
+            didUpdate = true;
+        }
+
+        if (false and _symbol == "BCH_BTC") {
+            static int maxCntBid = 0;
+            if (cntBid > maxCntBid)
+                maxCntBid = cntBid;
+            static int maxCntAsk = 0;
+            if (cntAsk > maxCntAsk) maxCntAsk = cntAsk;
+
+            if (cntBid>0||cntAsk>0)
+                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << maxCntAsk << maxCntBid << data; // todo how to handle data after timeout? (we should remove old ones?)
+        }
+        if (data.contains("asks") && _bitFlyerGotSnapshot) {
             // process asks
             const QJsonValue &asks = data["asks"];
             if (asks.isArray()) {
@@ -190,11 +213,12 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                     } else
                         qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "a no obj" << a;
                 }
+                didUpdate = true;
             } else {
                 qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "can't handle asks:" << asks << data;
             }
         }
-        if (data.contains("bids")) {
+        if (data.contains("bids") && _bitFlyerGotSnapshot) {
             // process bids
             const QJsonValue &bids = data["bids"];
             if (bids.isArray()) {
@@ -214,16 +238,16 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                     } else
                         qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "a no obj" << a;
                 }
+                didUpdate = true;
             } else {
                 qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "can't handle bids:" << bids << data;
             }
         }
-        // call handleSingleEntry here. amount < 0 -> for bids, > 0 for ask, count = 0 to delete, count = 1 to update
 
         // check for ticker based updates: this deletes complete orderbook
         if (data.contains("tick_id")) {
-//            if (_symbol == "BCH_BTC")
-//                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << data;
+            if (false and _symbol == "BCH_BTC")
+                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << data;
             // use best_bid / best_bid_size
             double price = data["best_bid"].toDouble();
             double amount = data["best_bid_size"].toDouble();
@@ -232,8 +256,10 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                 _bids.clear();
 
             // check whether best_bid is greater than bids?
-            while (_bids.begin() != _bids.end() && ( price > _bids.begin()->first))
+            while (_bids.begin() != _bids.end() && ( price < _bids.begin()->first)) {
+                qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete bids!" << price << _bids.begin()->first;
                 _bids.erase(_bids.begin());
+            }
 
             if ((_bids.cbegin() != _bids.cend()) &&
                     (price == _bids.cbegin()->first)) {
@@ -248,17 +274,23 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                 _asks.clear();
 
             // check whether best_ask is smaller than asks?
-            while (_asks.begin() != _asks.end() && ( price < _asks.begin()->first))
+            while (_asks.begin() != _asks.end() && ( price > _asks.begin()->first)) {
+                qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete asks!" << price << _asks.begin()->first;
                 _asks.erase(_asks.begin());
+            }
 
             if ((_asks.cbegin() != _asks.cend()) &&
                     (price == _asks.cbegin()->first)) {
                 _asks.begin()->second._amount = -amount;
             } else
                 _asks.insert(std::make_pair(price, BookItem(price, 1, -amount)));
+            didUpdate = true;
         }
 
-        emit dataUpdated();
+        if (didUpdate) {
+            if (false and _symbol == "BCH_BTC") printAsksBids();
+            emit dataUpdated();
+        }
         return true;
     } else return false;
 }
@@ -376,18 +408,26 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
 
 void ChannelBooks::printAsksBids() const
 {
-    qCDebug(Cchannel) << "asks:";
+    QString temp;
+    QTextStream asks(&temp);
     int i = 0;
     for (const auto &item : _asks) {
-        qCDebug(Cchannel) << item.second._price << item.second._count << item.second._amount;
+        asks << " (" << item.second._price << "," << item.second._count << "," << item.second._amount << ")";
         ++i;
         if (i>10)break;
     }
 
-    qCDebug(Cchannel) << "bids:";
+    qCDebug(Cchannel) << _symbol << "asks:" << temp;
+
+    temp.clear();
+
+    i = 0;
     for (const auto &item : _bids) {
-        qCDebug(Cchannel) << item.second._price << item.second._count << item.second._amount;
+        asks << " (" << item.second._price << "," << item.second._count << "," << item.second._amount << ")";
+        ++i;
+        if (i>10) break;
     }
+    qCDebug(Cchannel) << _symbol << "bids:" << temp;
 
 }
 

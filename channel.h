@@ -80,6 +80,8 @@ protected:
 
     BookItemMap _bids;
     BookItemMap _asks;
+
+    bool _bitFlyerGotSnapshot; // got the first snapshot?
 };
 
 class ChannelTrades : public Channel
