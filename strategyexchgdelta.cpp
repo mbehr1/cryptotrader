@@ -224,7 +224,7 @@ void StrategyExchgDelta::timerEvent(QTimerEvent *event)
 
     _lastStatus = QString("maxE1=%1 maxE2=%2 curPerc=%3 priceSell=%4 priceBuy=%5 msd=%6").
             arg(_deltaMaxE1).arg(_deltaMaxE2).arg(deltaPerc).arg(priceSell).arg(priceBuy).arg(msecsDiff);
-    qWarning() << __PRETTY_FUNCTION__ << _pair << _lastStatus;
+    qDebug() << __PRETTY_FUNCTION__ << _pair << _lastStatus;
     // strategy:
     // if deltaPerc > 1.x (const)  then buy at iBuy and sell at iSell
     if (deltaPerc > 0.75) { // 1% todo!
