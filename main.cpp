@@ -48,6 +48,7 @@ void catchUnixSignals(std::initializer_list<int> quitSignals) {
 int main(int argc, char *argv[])
 {
     int ret=0;
+    qSetMessagePattern("%{if-category}%{category} %{endif}%{type}:%{message}");
     do {
         gRestart = false;
         QCoreApplication a(argc, argv);
