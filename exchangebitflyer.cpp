@@ -588,7 +588,20 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
                         QString status = o["child_order_state"].toString();
                         QString pair = o["product_code"].toString();
                         double fee = -o["total_commission"].toDouble(); // was 1.5e-05 for sell BTC_JPY (so feeCur = BTC)
-                        QString feeCur; // todo
+                        QString feeCur; // pair might be FX_BTC_USD or BCH_BTC (BTC_JPY) so we need to return the part before the rightmost _
+                        auto elems = pair.split(QChar('_'));
+                        switch(elems.size()) {
+                        case 2: // e.g BTC_JPY
+                            feeCur = elems.at(0);
+                            break;
+                        case 3:
+                            feeCur = QString("%1_%2").arg(elems.at(0)).arg(elems.at(1));
+                            break;
+                        default:
+                            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "can't parse feeCur" << pair << elems.size() << elems;
+                            break;
+                        }
+
                         qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found pending order" << "cid=" << cid << o << amount << price << status << pair << fee << feeCur;
                         emit orderCompleted(name(), cid, amount, price, status, pair, fee, feeCur);
                         _pendingOrdersMap.erase(pit);
