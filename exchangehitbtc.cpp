@@ -685,8 +685,8 @@ void ExchangeHitbtc::handleReport(const QJsonObject &rep)
         int cid = rep["clientOrderId"].toString().toInt();
         auto it = _pendingOrdersMap.find(cid);
         if (it != _pendingOrdersMap.end()) {
-            if ((*it).second != rep["id"].toString())
-                qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "id mismatch!" << (*it).second << rep["id"].toString();
+            if ((*it).second != QString("%1").arg((long long)rep["id"].toDouble()))
+                qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "id mismatch!" << (*it).second << rep["id"];
             QString status = rep["status"].toString();
             // check status: new, suspended, partiallyFilled, filled, canceled, expired
             if (status == QStringLiteral("new") || status == QStringLiteral("partiallyFilled")
