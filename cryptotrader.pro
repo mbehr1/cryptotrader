@@ -21,14 +21,17 @@ HEADERS += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.h \
     strategyexchgdelta.h \
     exchangebinance.h \
     exchangenam.h \
-    strategyarbitrage.h
+    strategyarbitrage.h \
+    exchangehitbtc.h \
+    roundingdouble.h
 SOURCES += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.cpp $$PWD/lib/PubNubQtSync/c-core/core/pubnub_ccore.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_assert_std.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_json_parse.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_helper.c \
     tradestrategy.cpp \
     strategyexchgdelta.cpp \
     exchangenam.cpp \
     exchangebinance.cpp \
-    strategyarbitrage.cpp
-
+    strategyarbitrage.cpp \
+    exchangehitbtc.cpp \
+    roundingdouble.cpp
 
 SOURCES += main.cpp \
     exchangebitfinex.cpp \

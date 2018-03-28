@@ -14,6 +14,9 @@
 
 #include "engine.h"
 
+#include <cassert>
+#include "roundingdouble.h"
+
 bool gRestart = false;
 
 // taken from: https://gist.github.com/azadkuh/a2ac6869661ebd3f8588
@@ -49,6 +52,21 @@ int main(int argc, char *argv[])
 {
     int ret=0;
     qSetMessagePattern("%{if-category}%{category} %{endif}%{type}:%{message}");
+    {
+        RoundingDouble d(0.05, "0.1");
+        qDebug() << (double)d << (QString)d;
+        assert(d == 0.1);
+        assert(d == QString("0.1"));
+
+        assert(RoundingDouble(0.009, "0.01") == 0.01);
+        assert(RoundingDouble(0.0, "0.01") == QString("0.00"));
+        assert(RoundingDouble(0.05, "1") == QString("0"));
+        assert(RoundingDouble(0.5, "1") == QString("1"));
+        assert(RoundingDouble(0.5, "10") == QString("00"));
+        assert(RoundingDouble(5, "10") == QString("10"));
+        assert(RoundingDouble(50, "100") == QString("100"));
+
+    }
     do {
         gRestart = false;
         QCoreApplication a(argc, argv);

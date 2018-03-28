@@ -139,6 +139,7 @@ void ExchangeBinance::storePendingOrders()
     }
     doc.setArray(arr);
     _settings.setValue("PendingOrders", doc.toJson(QJsonDocument::Compact));
+    _settings.sync();
 }
 
 bool ExchangeBinance::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)

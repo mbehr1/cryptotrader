@@ -22,6 +22,7 @@ public:
     virtual bool handleChannelData(const QJsonArray &data);
     virtual bool handleDataFromBitFlyer(const QJsonObject &data);
     virtual bool handleDataFromBinance(const QJsonObject &data, bool complete); // complete=true -> complete set, false -> partial update
+    virtual bool handleDataFromHitbtc(const QJsonObject &data, bool complete); // complete = snapshot
     virtual QString getStatusMsg() const { return QString("Channel %1 (%2 %3):").arg(_channel).arg(_isSubscribed ? "s" : "u").arg(_isTimeout ? "TO" : "OK"); }
 
     const QString &channel() const { return _channel; }
@@ -60,6 +61,7 @@ public:
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual bool handleDataFromBitFlyer(const QJsonObject &data) override;
     virtual bool handleDataFromBinance(const QJsonObject &data, bool complete) override;
+    virtual bool handleDataFromHitbtc(const QJsonObject &data, bool complete); // complete = snapshot
 
     bool getPrices(bool ask, const double &amount, double &avg, double &limit, double *maxAmount=0) const; // determine at which price I could see the amount
 

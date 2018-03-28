@@ -13,6 +13,7 @@
 #include "exchangebitfinex.h"
 #include "exchangebitflyer.h"
 #include "exchangebinance.h"
+#include "exchangehitbtc.h"
 
 QString queryFromStdin(const QString &query)
 {
@@ -135,7 +136,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
         // _telegramBot->setChatTitle(s, "test title from bot"); // will succeed only for channels or groups (?) but not for private chats
     }
 
-    if(1){ // create Bitfinex exchange todo for test only disabled!
+    if(1){ // create Bitfinex exchange
         auto exchange = std::make_shared<ExchangeBitfinex>(this);
         ExchangeBitfinex &_exchange = *(exchange.get());
         connect(&_exchange, SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool)));
@@ -279,6 +280,39 @@ Engine::Engine(QObject *parent) : QObject(parent)
         }
     }
 
+    if (1){ // create hitbtc
+        QString key = set.value("HitBtcApiKey", QString("")).toString();
+        if (!key.length()) {
+            key = queryFromStdin("hitbtc api key");
+            if (!key.length())
+                throw std::invalid_argument("hitbtc api key missing");
+            set.setValue("HitBtcApiKey", key);
+            set.sync();
+        }
+        QString SKey = set.value("HitBtcApiSKey", QString("")).toString();
+        if (!SKey.length()) {
+            SKey = queryFromStdin("hitbtc api secret");
+            if (!SKey.length())
+                throw std::invalid_argument("hitbtc api secret missing");
+            set.setValue("HitBtcApiSKey", SKey);
+            set.sync();
+        }
+
+        auto exchange = std::make_shared<ExchangeHitbtc>(key, SKey, this);
+
+        assert(connect(&(*(exchange.get())), SIGNAL(exchangeStatus(QString,bool,bool)), this, SLOT(onExchangeStatus(QString,bool,bool))));
+        assert(connect(&(*(exchange.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool))));
+        assert(connect(&(*(exchange.get())), SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool))));
+
+        assert(connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
+                this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString))));
+        assert(connect(&(*(exchange.get())), SIGNAL(walletUpdate(QString, QString,QString,double,double)),
+                this, SLOT(onWalletUpdate(QString, QString,QString,double,double)), Qt::QueuedConnection));
+
+        assert(_exchanges.find(exchange->name()) == _exchanges.end());
+        _exchanges.insert(std::make_pair(exchange->name(), exchange));
+    }
+
     // now that we have all exchanges create the strategies for the arbitrage ones:
     if (1) {
         std::shared_ptr<StrategyArbitrage> strategy = std::make_shared<StrategyArbitrage>(QString("#a1"), this);
@@ -288,14 +322,18 @@ Engine::Engine(QObject *parent) : QObject(parent)
         // configure it:
         auto eBinance = std::dynamic_pointer_cast<ExchangeBinance>( _exchanges[binanceName]);
         auto eBitflyer = std::dynamic_pointer_cast<ExchangeBitFlyer>( _exchanges[bitFlyerName]);
+        auto eHitbtc = std::dynamic_pointer_cast<ExchangeHitbtc>( _exchanges[hitbtcName]);
+        (void)eHitbtc->addPair("BCHBTC");
 
         strategy->addExchangePair(_exchanges[bitfinexName], "tBCHBTC", "BCH", "BTC");
         strategy->addExchangePair(_exchanges[bitFlyerName], "BCH_BTC", "BCH", "BTC");
         strategy->addExchangePair(_exchanges[binanceName], "BCCBTC", "BCC", "BTC");
+        strategy->addExchangePair(_exchanges[hitbtcName], "BCHBTC", "BCH", "BTC");
 
         // now add available channels: (put this inside addExchangePair!
         strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBitflyer->getChannel("BCH_BTC", ExchangeBitFlyer::Book)));
         strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBinance->getChannel("BCCBTC", ExchangeBinance::Book)));
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eHitbtc->getChannel("BCHBTC", ExchangeHitbtc::Book)));
 
         _strategies.push_front(strategy);
     }

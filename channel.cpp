@@ -97,6 +97,19 @@ bool Channel::handleDataFromBinance(const QJsonObject &data, bool complete)
     return true;
 }
 
+bool Channel::handleDataFromHitbtc(const QJsonObject &data, bool complete)
+{
+    (void)data;
+    (void)complete;
+    _lastMsg = QDateTime::currentDateTime();
+    if (_isTimeout) {
+        _isTimeout = false;
+        qCWarning(Cchannel) << "channel (" << _id << _symbol << ") seems back!";
+        emit timeout(_id, _isTimeout);
+    }
+    return true;
+}
+
 bool greater(const double &a, const double &b)
 {
     return a>b;
@@ -328,9 +341,38 @@ bool ChannelBooks::handleDataFromBinance(const QJsonObject &data, bool complete)
     } else return false;
 }
 
+bool ChannelBooks::handleDataFromHitbtc(const QJsonObject &data, bool complete)
+{
+    if (Channel::handleDataFromHitbtc(data, complete)) {
+        if (complete) {
+            _bids.clear();
+            _asks.clear();
+        }
+        // now process the arrays ask and bid. Each elem contains price and size and are absolut (size=0 -> delete)
+        for (const auto &b : data["bid"].toArray()) {
+            if (b.isObject()) {
+                const QJsonObject &bo = b.toObject();
+                double price = bo["price"].toString().toDouble();  // all positive
+                double size = bo["size"].toString().toDouble();
+                handleSingleEntry(price, size==0.0 ? 0 : -1, size);
+            } else qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "expect object" << b << data << complete;
+        }
+        for (const auto &a : data["ask"].toArray()) {
+            if (a.isObject()) {
+                const QJsonObject &bo = a.toObject();
+                double price = bo["price"].toString().toDouble();  // all positive
+                double size = bo["size"].toString().toDouble();
+                handleSingleEntry(price, size==0.0 ? 0 : -1, -size);
+            } else qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "expect object" << a << data << complete;
+        }
+        emit dataUpdated();
+        return true;
+    } else return false;
+}
+
 void ChannelBooks::handleSingleEntry(const double &price, const int &count, const double &amount)
 { // count == -1 -> set value abs and don't add rel.
-    bool isFunding = _symbol.startsWith("f"); // todo cache this?
+    bool isFunding = _symbol.startsWith("f"); // todo cache this? to avoid possible mismatch from other exchanges!
     // count = 0 -> delete
     // otherwise add/update
     bool isBid = (isFunding ? (amount<0) : (amount>0));
