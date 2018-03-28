@@ -438,7 +438,7 @@ bool ChannelBooks::getPrices(bool ask, const double &amount, double &avg, double
         if (maxAmount) *maxAmount = gotAmount; // this is not quite right...
         return true;
     } else {
-        qCWarning(Cchannel) << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
+        //qCWarning(Cchannel) << __FUNCTION__ << _exchange->name() << _symbol << QString("%1").arg(ask ? "ask" : "bid") << amount << "not possible!" << "got amount=" << gotAmount;
         if (0) for (const auto &item : ask ? _asks : _bids) {
             qCDebug(Cchannel) << item.second._price << item.second._count << item.second._amount;
         }
