@@ -46,6 +46,7 @@ protected:
         double _availCur1;
         double _availCur2;
     };
+    void appendLastStatus(QString &lastStatus, const ExchgData &e1, const ExchgData &e2, const double &delta) const;
     std::map<QString, ExchgData> _exchgs;
 
     void timerEvent(QTimerEvent *event) override;

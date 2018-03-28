@@ -164,6 +164,21 @@ void StrategyArbitrage::announceChannelBook(std::shared_ptr<ChannelBooks> book)
     }
 }
 
+void StrategyArbitrage::appendLastStatus(QString &lastStatus,
+                                         const ExchgData &e1,
+                                         const ExchgData &e2,
+                                         const double &delta) const
+{
+    QString stat;
+    if (delta == 0.0)
+        stat = QStringLiteral("  ==  ");
+    else if (delta <0.0)
+        stat = QString("<%1%").arg(delta, 0, 'f', -2); // "<0.02%"
+    else
+        stat = QString(">%1%").arg(delta, 0, 'f', -2);
+    lastStatus.append(QString("%1 %2 %3 |").arg(e1._name).arg(stat).arg(e2._name));
+}
+
 void StrategyArbitrage::timerEvent(QTimerEvent *event)
 {
     (void)event;
@@ -276,16 +291,18 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                                 maxAmountBuy = maxAmountE2Buy;
                                 maxAmountSell = maxAmountE1Sell;
                             } else {
-                                _lastStatus.append( QString("\nprices interleave or not avail: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
+                                appendLastStatus(_lastStatus, e1, e2, 0.0);
+                                //_lastStatus.append( QString("\nprices interleave or not avail: %5 %1 %2 / %6 %3 %4").arg(price1Buy).arg(price1Sell).arg(price2Buy).arg(price2Sell).arg(e1._name).arg(e2._name));
                                 continue;
                             }
                         }
                         ExchgData &eBuy = iBuy == 0 ? e1 : e2;
                         ExchgData &eSell = iBuy == 0 ? e2 : e1;
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
-                        _lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
-                                           .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
-                                           .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
+                        appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );
+                        //_lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
+                        //                   .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
+                        //                   .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
 
                         if (deltaPerc >= _MinDeltaPerc) {
                             // do we have cur2 at eBuy
@@ -350,7 +367,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
         }
     }
 
-    qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << _lastStatus;
+    qCInfo(CsArb) << _id << _lastStatus;
 }
 
 void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double price, QString pair, double fee, QString feeCur)
