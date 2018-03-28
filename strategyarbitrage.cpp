@@ -176,7 +176,8 @@ void StrategyArbitrage::appendLastStatus(QString &lastStatus,
         stat = QString("<%1%").arg(-delta, 0, 'f', 2); // "<0.02%"
     else
         stat = QString(">%1%").arg(delta, 0, 'f', 2);
-    lastStatus.append(QString("%1 %2 %3 |").arg(e1._name).arg(stat).arg(e2._name));
+    bool e1GtE2 = e1._availCur1 > e2._availCur1;
+    lastStatus.append(QString("%1%4%2%5%3 |").arg(e1._name).arg(stat).arg(e2._name).arg(e1GtE2 ? "O" : ".").arg(e1GtE2 ? "." : "O"));
 }
 
 void StrategyArbitrage::timerEvent(QTimerEvent *event)
@@ -300,6 +301,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         ExchgData &eSell = iBuy == 0 ? e2 : e1;
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
                         appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );
+                        // iBuy == 0 -> eBuy = e1, price e1 < price e2 -> -deltaPerc
                         //_lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
                         //                   .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
                         //                   .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
