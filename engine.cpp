@@ -182,8 +182,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
         connect(&(*(exchange.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
         connect(&(*(exchange.get())), SIGNAL(channelTimeout(QString, int, bool)), this, SLOT(onChannelTimeout(QString, int, bool)));
 
-        connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
-                this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString)));
+        assert(connect(&(*(exchange.get())), SIGNAL(orderCompleted(QString, int,double,double,QString, QString, double, QString)),
+                this, SLOT(onOrderCompleted(QString, int,double,double,QString, QString, double, QString))));
         connect(&(*(exchange.get())), SIGNAL(walletUpdate(QString, QString,QString,double,double)),
                 this, SLOT(onWalletUpdate(QString, QString,QString,double,double)), Qt::QueuedConnection);
 
@@ -577,7 +577,8 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
-                _telegramBot->sendMessage(s, botMsg, true);
+                if (!_telegramBot->sendMessage(s, botMsg, true))
+                    qWarning() << __PRETTY_FUNCTION__ << "failed to sendMessage" << botMsg;
             }
         }
 
