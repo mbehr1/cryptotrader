@@ -270,7 +270,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 
             // check whether best_bid is greater than bids?
             while (_bids.begin() != _bids.end() && ( price < _bids.begin()->first)) {
-                qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete bids!" << price << _bids.begin()->first;
+                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete bids!" << price << _bids.begin()->first;
                 _bids.erase(_bids.begin());
             }
 
@@ -288,7 +288,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 
             // check whether best_ask is smaller than asks?
             while (_asks.begin() != _asks.end() && ( price > _asks.begin()->first)) {
-                qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete asks!" << price << _asks.begin()->first;
+                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete asks!" << price << _asks.begin()->first;
                 _asks.erase(_asks.begin());
             }
 
@@ -354,7 +354,7 @@ bool ChannelBooks::handleDataFromHitbtc(const QJsonObject &data, bool complete)
                 const QJsonObject &bo = b.toObject();
                 double price = bo["price"].toString().toDouble();  // all positive
                 double size = bo["size"].toString().toDouble();
-                handleSingleEntry(price, size==0.0 ? 0 : -1, size);
+                handleSingleEntry(price, size==0.0 ? 0 : -1, size == 0.0 ? 1.0 : size);
             } else qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "expect object" << b << data << complete;
         }
         for (const auto &a : data["ask"].toArray()) {
