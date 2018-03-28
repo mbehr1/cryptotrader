@@ -245,7 +245,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
                         // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
                         // but as handleSingleEntry does amount=0 -> ask we need to treat this differently here!
                         if (size>=0.0)
-                            handleSingleEntry(price, size==0.0 ? 0 : -1, size); // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
+                            handleSingleEntry(price, size==0.0 ? 0 : -1, size==0.0 ? 1.0 : size); // bitFlyer sends size 0 if the price is empty not if a single price bid was cancelled
                         else
                             qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "invalid size" << o;
                     } else
