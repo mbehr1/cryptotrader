@@ -306,6 +306,7 @@ void ExchangeHitbtc::onWsConnected()
     qCInfo(CeHitbtc) << __PRETTY_FUNCTION__ << _isConnectedWs;
     if (_isConnectedWs) return;
     _isConnectedWs = true;
+    _isConnected = true;
     _isAuth = false;
 
     // login:
@@ -538,6 +539,7 @@ void ExchangeHitbtc::onWsDisconnected()
 {
     qCInfo(CeHitbtc) << __PRETTY_FUNCTION__ << _isConnectedWs << _ws.closeReason();
     if (_isConnectedWs) {
+        _isConnected = false;
         _isConnectedWs = false;
         _isAuth = false;
         emit exchangeStatus(name(), false, true);
