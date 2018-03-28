@@ -7,7 +7,7 @@
 #include "exchangehitbtc.h"
 #include "roundingdouble.h"
 
-Q_LOGGING_CATEGORY(CeHitbtc, "hitbtc")
+Q_LOGGING_CATEGORY(CeHitbtc, "e.hitbtc")
 
 ExchangeHitbtc::ExchangeHitbtc(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangehitbtc"), _timerId(-1), _wsLastPong(0), _isConnectedWs(false), _wsNextId(1)

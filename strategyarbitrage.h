@@ -7,6 +7,8 @@
 #include "tradestrategy.h"
 #include "exchange.h"
 
+Q_DECLARE_LOGGING_CATEGORY(CsArb)
+
 class StrategyArbitrage : public TradeStrategy
 {
     Q_OBJECT

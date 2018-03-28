@@ -19,7 +19,7 @@ extern "C" {
 #include "pubnub_helper.h"
 }
 
-Q_LOGGING_CATEGORY(CbitFlyer, "exchg.bitFlyer")
+Q_LOGGING_CATEGORY(CbitFlyer, "e.bitFlyer")
 
 ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebitflyer")

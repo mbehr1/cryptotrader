@@ -4,10 +4,12 @@
 #include <QDir>
 #include "strategyarbitrage.h"
 
+Q_LOGGING_CATEGORY(CsArb, "s.arb")
+
 StrategyArbitrage::StrategyArbitrage(const QString &id, QObject *parent) :
     TradeStrategy(id, QString("cryptotrader_strategyarbitrage_%1").arg(id), parent)
 {
-    qDebug() << __PRETTY_FUNCTION__ << _id;
+    qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id;
 
     _timerId = startTimer(1000); // check each sec todo change to notify based on channelbooks
 
@@ -20,9 +22,9 @@ StrategyArbitrage::StrategyArbitrage(const QString &id, QObject *parent) :
     _csvFile.setFileName(QString("%1.csv").arg(_id));
     if (_csvFile.open(QFile::WriteOnly | QFile::Append)) {
         _csvStream.setDevice(&_csvFile);
-        qDebug() << __PRETTY_FUNCTION__ << "using" << QDir::current().absolutePath() <<  _csvFile.fileName() << "as csv file.";
+        qCDebug(CsArb) << __PRETTY_FUNCTION__ << "using" << QDir::current().absolutePath() <<  _csvFile.fileName() << "as csv file.";
     } else {
-        qWarning() << "couldn't open file for writing: " << _csvFile.fileName();
+        qCWarning(CsArb) << "couldn't open file for writing: " << _csvFile.fileName();
     }
 }
 
@@ -61,7 +63,7 @@ void StrategyArbitrage::ExchgData::storeSettings(QSettings &set)
 
 StrategyArbitrage::~StrategyArbitrage()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _id;
+    qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id;
     killTimer(_timerId);
     // store persistency
     _settings.setValue("MaxTimeDiffMs", _MaxTimeDiffMs);
@@ -97,7 +99,7 @@ QString StrategyArbitrage::getStatusMsg() const
 
 QString StrategyArbitrage::onNewBotMessage(const QString &msg)
 {
-    qDebug() << __PRETTY_FUNCTION__ << _id << msg;
+    qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << msg;
     QString toRet = TradeStrategy::onNewBotMessage(msg);
     bool cmdHandled = toRet.length() > 0;
     toRet.append(QString("StrategyExchgDelta%1: ").arg(_id));
@@ -157,7 +159,7 @@ void StrategyArbitrage::announceChannelBook(std::shared_ptr<ChannelBooks> book)
         if (e._book) return; // have it already
         if (e._pair == book->symbol()) {
             e._book = book;
-            qDebug() << __PRETTY_FUNCTION__ << _id << "have book for" << e._name << e._pair;
+            qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << "have book for" << e._name << e._pair;
         }
     }
 }
@@ -211,13 +213,13 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
             for (++it2 ; it2 != _exchgs.end(); ++it2) {
                 ExchgData &e2 = (*it2).second;
                 if (!e2._waitForOrder && !e1._waitForOrder) { // e1. might change during this iteration
-                    //qDebug() << "e1=" << e1._name << "e2=" << e2._name;
+                    //qCDebug(CsArb) << "e1=" << e1._name << "e2=" << e2._name;
 
                     // are both prices from within same time range?
                     qint64 msecsDiff = e1._book->lastMsgTime().msecsTo(e2._book->lastMsgTime());
                     if (msecsDiff < 0) msecsDiff = -msecsDiff;
                     if (msecsDiff > _MaxTimeDiffMs) {
-                        qDebug() << __PRETTY_FUNCTION__ << _id << "book times differences too big!" << e1._name << e2._name << msecsDiff;
+                        qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << "book times differences too big!" << e1._name << e2._name << msecsDiff;
                     } else {
                         // check prices:
                         double price1Buy=0.0, price1Sell=0.0, price2Buy=0.0, price2Sell=0.0, avg;
@@ -324,11 +326,11 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
                                 str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(eSell._cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(eSell._cur2).arg(eSell._name);
                                 _lastStatus.append(str);
-                                qWarning() << str << eSell._book->symbol();
+                                qCWarning(CsArb) << str << eSell._book->symbol();
                                 emit subscriberMsg(str);
                                 str = QString("buy %1 %2 for %3 %4 at %5").arg(amountBuyCur1).arg(eBuy._cur1).arg(amountBuyCur1*priceBuy).arg(eBuy._cur2).arg(eBuy._name);
                                 _lastStatus.append(str);
-                                qWarning() << str << eBuy._book->symbol();
+                                qCWarning(CsArb) << str << eBuy._book->symbol();
                                 emit subscriberMsg(str);
 
                                 // buy:
@@ -348,17 +350,17 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
         }
     }
 
-    qDebug() << __PRETTY_FUNCTION__ << _id << _lastStatus;
+    qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << _lastStatus;
 }
 
 void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double price, QString pair, double fee, QString feeCur)
 {
-    qDebug() << __PRETTY_FUNCTION__ << _id << exchange << amount << price << pair << fee << feeCur;
+    qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << exchange << amount << price << pair << fee << feeCur;
 
     const auto &it = _exchgs.find(exchange);
     if (it != _exchgs.cend()) {
         ExchgData &e = (*it).second;
-        qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 before funds update: %2 %3 / %4 %5").arg(e._name).arg(e._availCur1).arg(e._cur1).arg(e._availCur2).arg(e._cur2);
+        qCWarning(CsArb) << __PRETTY_FUNCTION__ << QString("Exchange %1 before funds update: %2 %3 / %4 %5").arg(e._name).arg(e._availCur1).arg(e._cur1).arg(e._availCur2).arg(e._cur2);
         e._availCur1 += amount;
         e._availCur2 -= (amount * price);
         if (feeCur == e._cur2)
@@ -367,11 +369,11 @@ void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double p
             if (feeCur == e._cur1 || feeCur.length()==0)// we default to cur1 if empty
                 e._availCur1 -= fee < 0.0 ? -fee : fee;
             else {
-                qWarning() << __PRETTY_FUNCTION__ << _id << QString("ignoring fee %1 %2 due to different cur.").arg(fee).arg(feeCur);
+                qCWarning(CsArb) << __PRETTY_FUNCTION__ << _id << QString("ignoring fee %1 %2 due to different cur.").arg(fee).arg(feeCur);
             }
         }
         if (amount == 0.0 && fee == 0.0) {
-            qWarning() << __PRETTY_FUNCTION__ << _id << "please investigate! failed order? keeping wait for order";
+            qCWarning(CsArb) << __PRETTY_FUNCTION__ << _id << "please investigate! failed order? keeping wait for order";
         } else
             e._waitForOrder = false;
 
@@ -379,9 +381,9 @@ void StrategyArbitrage::onFundsUpdated(QString exchange, double amount, double p
         if (e._availCur2 < 0.0) e._availCur2 = 0.0;
         e.storeSettings(_settings);
         _settings.sync();
-        qWarning() << __PRETTY_FUNCTION__ << QString("Exchange %1 after funds update: %2 %3 / %4 %5").arg(e._name).arg(e._availCur1).arg(e._cur1).arg(e._availCur2).arg(e._cur2);
+        qCWarning(CsArb) << __PRETTY_FUNCTION__ << QString("Exchange %1 after funds update: %2 %3 / %4 %5").arg(e._name).arg(e._availCur1).arg(e._cur1).arg(e._availCur2).arg(e._cur2);
     } else {
-        qWarning() << __PRETTY_FUNCTION__ << _id << "unknown exchange!" << exchange;
+        qCWarning(CsArb) << __PRETTY_FUNCTION__ << _id << "unknown exchange!" << exchange;
     }
 }
 
