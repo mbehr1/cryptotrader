@@ -1,5 +1,6 @@
 #include "roundingdouble.h"
 #include <cassert>
+#include <cmath>
 #include <QDebug>
 
 RoundingDouble::RoundingDouble(const double &d, const QString &minNumber) :
@@ -40,17 +41,21 @@ RoundingDouble::operator double() const
 RoundingDouble::operator QString() const
 {
     QString temp;
-    if (_prec >= 0) { // normal 0.1, ...
+    if (_prec > 0) { // normal 0.1, ...
         temp = QString("%1").arg(_val, 0, 'f', _prec);
     } else { // e.g. prec = -1 -> "10"
-        int loops = 0 - _prec;
-        unsigned long div = 10;
-        for (int i=1; i<loops; ++i) {
-            div *= 10ul;
+        if (_prec == 0) {
+           temp = QString("%1").arg(std::llround(_val)); // different qt versions can't handle the double 0 case
+        } else {
+            int loops = 0 - _prec;
+            unsigned long div = 10;
+            for (int i=1; i<loops; ++i) {
+                div *= 10ul;
+            }
+            temp = QString("%1").arg(_val/div, 0, 'f', 0);
+            for (int i=0; i<loops; ++i)
+                temp.append('0');
         }
-        temp = QString("%1").arg(_val/div, 0, 'f', 0);
-        for (int i=0; i<loops; ++i)
-            temp.append('0');
     }
 //    qDebug() << __PRETTY_FUNCTION__ << _val << _prec << temp;
     return temp;
