@@ -52,7 +52,7 @@ RoundingDouble::operator QString() const
             for (int i=1; i<loops; ++i) {
                 div *= 10ul;
             }
-            temp = QString("%1").arg(_val/div, 0, 'f', 0);
+            temp = QString("%1").arg(std::llround(_val/div));
             for (int i=0; i<loops; ++i)
                 temp.append('0');
         }
