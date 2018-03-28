@@ -173,9 +173,9 @@ void StrategyArbitrage::appendLastStatus(QString &lastStatus,
     if (delta == 0.0)
         stat = QStringLiteral("  ==  ");
     else if (delta <0.0)
-        stat = QString("<%1%").arg(delta, 0, 'f', -2); // "<0.02%"
+        stat = QString("<%1%").arg(delta, 0, 'f', 2); // "<0.02%"
     else
-        stat = QString(">%1%").arg(delta, 0, 'f', -2);
+        stat = QString(">%1%").arg(delta, 0, 'f', 2);
     lastStatus.append(QString("%1 %2 %3 |").arg(e1._name).arg(stat).arg(e2._name));
 }
 
