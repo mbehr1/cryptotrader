@@ -10,11 +10,13 @@
  *
 */
 
+Q_LOGGING_CATEGORY(CeBinance, "e.binance")
+
 ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebinance")
   , _nrChannels(0), _ws2LastPong(0), _isConnectedWs2(false)
 {
-    qDebug() << __PRETTY_FUNCTION__ << name();
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << name();
 
     loadPendingOrders();
 
@@ -49,7 +51,7 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
 
 ExchangeBinance::~ExchangeBinance()
 {
-    qDebug() << __PRETTY_FUNCTION__ << name();
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << name();
     _queryTimer.stop();
 
     disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBinance::onWsDisconnected);
@@ -61,6 +63,10 @@ ExchangeBinance::~ExchangeBinance()
 
 bool ExchangeBinance::addPair(const QString &symbol)
 {
+    if (_isConnected) {
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "already connected. Would miss streams for " << symbol;
+        return false;
+    }
     // check whether it's already contained?
     if (_subscribedChannels.find(symbol) == _subscribedChannels.end()) {
         auto chb = std::make_shared<ChannelBooks>(this, ++_nrChannels, symbol);
@@ -74,7 +80,7 @@ bool ExchangeBinance::addPair(const QString &symbol)
         _subscribedChannels[symbol] = std::make_pair(chb, ch);
         return true;
     } else {
-        qWarning() << __PRETTY_FUNCTION__ << "have already" << symbol;
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "have already" << symbol;
         return false;
     }
 }
@@ -121,7 +127,7 @@ void ExchangeBinance::loadPendingOrders()
             }
         }
     }
-    qDebug() << __PRETTY_FUNCTION__ << "loaded" << _pendingOrdersMap.size() << "pending orders";
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "loaded" << _pendingOrdersMap.size() << "pending orders";
 }
 
 void ExchangeBinance::storePendingOrders()
@@ -167,7 +173,7 @@ bool ExchangeBinance::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doS
             totalParams.append(*postData);
         QString signature = QMessageAuthenticationCode::hash(totalParams, _sKey.toUtf8(), QCryptographicHash::Sha256).toHex();
         fullPath.append(QString("&signature=%1").arg(signature));
-        // qDebug() << __PRETTY_FUNCTION__ << "totalParams=" << totalParams << "fullPath=" << fullPath;
+        // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "totalParams=" << totalParams << "fullPath=" << fullPath;
     }
     QString fullUrl("https://api.binance.com");
     fullUrl.append(fullPath);
@@ -179,7 +185,7 @@ bool ExchangeBinance::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doS
 
 void ExchangeBinance::reconnect()
 {
-    qDebug() << __PRETTY_FUNCTION__ << "todo!";
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "todo!";
 }
 
 void ExchangeBinance::triggerAccountInfo()
@@ -192,7 +198,7 @@ void ExchangeBinance::triggerAccountInfo()
         _isAuth = false;
         QByteArray arr = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
                            // check for codes here:
                            // ignore code -1021, Timestamp out of recv window
                            QJsonDocument d = QJsonDocument::fromJson(arr);
@@ -201,11 +207,11 @@ void ExchangeBinance::triggerAccountInfo()
                             case -1021: // ignore retrigger will fix it
                                 break;
                            default:
-                            qWarning() << __PRETTY_FUNCTION__ << "unknown code!" << d.object();
+                            qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "unknown code!" << d.object();
                            break;
                            }
                            } else
-                           qWarning() << __PRETTY_FUNCTION__ << "unexpected answer" << d << arr;
+                           qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "unexpected answer" << d << arr;
             return;
         }
         QJsonDocument d = QJsonDocument::fromJson(arr);
@@ -213,23 +219,23 @@ void ExchangeBinance::triggerAccountInfo()
             _accountInfo = d.object();
             _isAuth = true;
             if (!wasAuth) {
-                // qDebug() << __PRETTY_FUNCTION__ << _accountInfo;
+                // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _accountInfo;
             }
             // "buyerCommission":0,"makerCommission":10,"sellerCommission":0,"takerCommission":10,
             // currently we assume 0.1% fee and guess this is expressed by 10
             if (_accountInfo["makerCommission"].toInt()!=10 || _accountInfo["takerCommission"].toInt() != 10) {
-                qWarning() << __PRETTY_FUNCTION__ << "expect different commissions!" << _accountInfo;
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "expect different commissions!" << _accountInfo;
             }
 
             if (_accountInfo.contains("balances"))
               updateBalances(_accountInfo["balances"].toArray());
             if (!_accountInfo["canTrade"].toBool()) // "canDeposit":true,"canTrade":true,"canWithdraw":true,
-                qDebug() << __PRETTY_FUNCTION__ << "got account into. canTrade=" << _accountInfo["canTrade"].toBool();
+                qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "got account into. canTrade=" << _accountInfo["canTrade"].toBool();
         } else
-          qDebug() << __PRETTY_FUNCTION__ << d;
+          qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d;
 
     })){
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
@@ -238,24 +244,24 @@ void ExchangeBinance::updateBalances(const QJsonArray &arr)
     if (_meBalances.isEmpty()) {
         // first time, just set it:
         _meBalances = arr;
-        qDebug() << __PRETTY_FUNCTION__ << "got first set of balances=" << _meBalances.count(); // <<  _meBalances;
+        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "got first set of balances=" << _meBalances.count(); // <<  _meBalances;
         for (const auto &bal : _meBalances) {
             if (bal.isObject()) {
                 const auto &b = bal.toObject();
-                //qDebug() << "b=" << b << b["free"] << b["locked"] << b["asset"];
+                //qCDebug(CeBinance) << "b=" << b << b["free"] << b["locked"] << b["asset"];
                 // we have either "free"/"locked"/"asset" or "b"/"f"/"l":
                 bool shortFormat = b.contains("a");
 
                 if (b[shortFormat ? "f" : "free"].toString().toDouble() != 0.0 || b[shortFormat ? "l" : "locked"].toString().toDouble() != 0.0)
-                    qDebug() << " " << b[shortFormat ? "a" : "asset"].toString() << b[shortFormat ? "f" : "free"].toString() << b[shortFormat ? "l" : "locked"].toString();
-            } else qDebug() << bal;
+                    qCDebug(CeBinance) << " " << b[shortFormat ? "a" : "asset"].toString() << b[shortFormat ? "f" : "free"].toString() << b[shortFormat ? "l" : "locked"].toString();
+            } else qCDebug(CeBinance) << bal;
         }
     } else {
         if (arr.isEmpty()) {
             // go through each _meBalances and emit walletUpdate...
             // todo
             _meBalances = arr;
-            qDebug() << __PRETTY_FUNCTION__ << "cleared balances. todo!";
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "cleared balances. todo!";
         } else {
             // compare each:
             for (const auto &bo : arr) {
@@ -277,12 +283,12 @@ void ExchangeBinance::updateBalances(const QJsonArray &arr)
                             if (aFree != bFree) {
                                 double delta = bFree - aFree;
                                 emit walletUpdate(name(), "free", asset, bFree, delta);
-                                qDebug() << __PRETTY_FUNCTION__ << "wallet update: free " << asset << bFree << delta;
+                                qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "wallet update: free " << asset << bFree << delta;
                             }
                             if (aLocked != bLocked) {
                                 double delta = bLocked - aLocked;
                                 emit walletUpdate(name(), "locked", asset, bLocked, delta);
-                                qDebug() << __PRETTY_FUNCTION__ << "wallet update: locked " << asset << bLocked << delta;
+                                qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "wallet update: locked " << asset << bLocked << delta;
                             }
                             found = true;
                             break;
@@ -291,16 +297,16 @@ void ExchangeBinance::updateBalances(const QJsonArray &arr)
                     if (!found) {
                         if (bFree) {
                             emit walletUpdate(name(), "free", asset, bFree, bFree);
-                            qDebug() << __PRETTY_FUNCTION__ << "wallet update: free " << asset << bFree;
+                            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "wallet update: free " << asset << bFree;
                         }
                         if (bLocked) {
                             emit walletUpdate(name(), "locked", asset, bLocked, bLocked);
-                            qDebug() << __PRETTY_FUNCTION__ << "wallet update: locked " << asset << bLocked;
+                            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "wallet update: locked " << asset << bLocked;
                         }
                     }
 
                 } else
-                    qWarning() << __PRETTY_FUNCTION__ << "wrong data! missing asset" << b;
+                    qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "wrong data! missing asset" << b;
             }
             // 2nd check for removed ones. (and send 0 update) todo
             _meBalances = arr;
@@ -316,26 +322,26 @@ void ExchangeBinance::triggerGetOrders(const QString &symbol)
     if (!triggerApiRequest(path, true, GET, 0,
                            [this, symbol](QNetworkReply *reply) {
         if (reply->error() != QNetworkReply::NoError) {
-            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
             return;
         }
         QByteArray arr = reply->readAll();
         QJsonDocument d = QJsonDocument::fromJson(arr);
-        // qDebug() << __PRETTY_FUNCTION__ << d;
+        // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d;
         if (d.isArray()) {
             updateOrders(symbol, d.array());
         } else
-          qWarning() << __PRETTY_FUNCTION__ << "can't handle" << d;
+          qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "can't handle" << d;
 
     })){
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
 void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
 {
     if (arr == _meOrders[symbol]) return;
-    // qDebug() << __PRETTY_FUNCTION__ << symbol << arr;
+    // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << symbol << arr;
     _meOrders[symbol] = arr;
 
     int nrActive = 0;
@@ -357,12 +363,12 @@ void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
 
                 bool active = status == "NEW" || status == "PARTIALLY_FILLED"; // other stati?
                 if (!active) {
-                    // qDebug() << __PRETTY_FUNCTION__ << "got inactive order=" << id << status << o;
+                    // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "got inactive order=" << id << status << o;
                     // check for pending orders:
                     auto pit = _pendingOrdersMap.find(id);
                     if (pit != _pendingOrdersMap.end()) {
                         int cid = (*pit).second;
-                        qDebug() << __PRETTY_FUNCTION__ << "found pending order. cid=" << cid << id << o;
+                        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "found pending order. cid=" << cid << id << o;
                         // do we got the commission (fee) data yet (coming from trades only)
                         double fee = 0.0;
                         QString feeCur;
@@ -371,7 +377,7 @@ void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
                             double amount = o["executedQty"].toString().toDouble();
                             if (isSell && amount >= 0.0) amount = -amount;
                             double price = o["price"].toString().toDouble();
-                            qDebug() << __PRETTY_FUNCTION__ << "found pending order" << cid << amount << price << status << symbol << fee << feeCur;
+                            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "found pending order" << cid << amount << price << status << symbol << fee << feeCur;
                             emit orderCompleted(name(), cid, amount, price, status, symbol, fee, feeCur);
                             _pendingOrdersMap.erase(pit);
                             storePendingOrders();
@@ -379,25 +385,25 @@ void ExchangeBinance::updateOrders(const QString &symbol, const QJsonArray &arr)
                             // need to clear cache as otherwise it will be optimized and not checked next time
                             _meOrders[symbol] = QJsonArray();
                             // we keep it open for now:
-                            qWarning() << __PRETTY_FUNCTION__ << "got no fee data for not active order. keeping it pending." << cid << id << o;
+                            qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "got no fee data for not active order. keeping it pending." << cid << id << o;
                         }
                     }
                 } else {
                     ++nrActive;
-                    qDebug() << __PRETTY_FUNCTION__ << "got active order=" << o << arr.size();
+                    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "got active order=" << o << arr.size();
                 }
 
             } else {
-                qWarning() << __PRETTY_FUNCTION__ << "empty orderId" << o;
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "empty orderId" << o;
             }
         } else {
-            qWarning() << __PRETTY_FUNCTION__ << "expected obj got " << ao;
+            qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "expected obj got " << ao;
         }
     }
 
     if (!nrActive && _pendingOrdersMap.size()) {
         // todo need to check which of the pending orders are from proper symbol!
-        qWarning() << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << symbol << _pendingOrdersMap.size();
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "got pending orders without active orders!" << symbol << _pendingOrdersMap.size();
     }
 }
 
@@ -409,25 +415,25 @@ void ExchangeBinance::triggerGetMyTrades(const QString &symbol)
     if (!triggerApiRequest(path, true, GET, 0,
                            [this, symbol](QNetworkReply *reply) {
         if (reply->error() != QNetworkReply::NoError) {
-            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
             return;
         }
         QByteArray arr = reply->readAll();
         QJsonDocument d = QJsonDocument::fromJson(arr);
-        //qDebug() << __PRETTY_FUNCTION__ << d;
+        //qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d;
         if (d.isArray()) {
             updateTrades(symbol, d.array());
         } else
-          qWarning() << __PRETTY_FUNCTION__ << "can't handle" << d;
+          qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "can't handle" << d;
     })){
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
 void ExchangeBinance::updateTrades(const QString &symbol, const QJsonArray &arr)
 {
     if (arr == _meTradesCache[symbol]) return;
-    qDebug() << __PRETTY_FUNCTION__ << symbol << arr;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << symbol << arr;
     _meTradesCache[symbol] = arr;
 
     auto &map = _meTradesMapMap[symbol];
@@ -438,9 +444,9 @@ void ExchangeBinance::updateTrades(const QString &symbol, const QJsonArray &arr)
                 QString orderId = QString("%1").arg((int64_t)o["orderId"].toDouble());
                 map[orderId] = o; // we could check first whether there is any difference?
             } else
-                qWarning() << __PRETTY_FUNCTION__ << "missing orderId:" << o;
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "missing orderId:" << o;
         } else
-            qWarning() << __PRETTY_FUNCTION__ << "can't handle: " << a;
+            qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "can't handle: " << a;
     }
 }
 
@@ -472,7 +478,7 @@ void ExchangeBinance::triggerCreateListenKey()
     if (!triggerApiRequest(path, false, POST, &postData,
                            [this](QNetworkReply *reply) {
         if (reply->error() != QNetworkReply::NoError) {
-            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
                            assert(false);
             return;
         }
@@ -481,18 +487,18 @@ void ExchangeBinance::triggerCreateListenKey()
         if (d.isObject()) {
             _listenKey = d.object()["listenKey"].toString();
             _listenKeyCreated = QDateTime::currentDateTime();
-            qDebug() << __PRETTY_FUNCTION__ << "got a listenKey. len=" << _listenKey.length();
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "got a listenKey. len=" << _listenKey.length();
         } else
-          qDebug() << __PRETTY_FUNCTION__ << d;
+          qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d;
 
     })){
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
 void ExchangeBinance::keepAliveListenKey()
 {
-    //qDebug() << __PRETTY_FUNCTION__;
+    //qCDebug(CeBinance) << __PRETTY_FUNCTION__;
     // check whether we have a listen key at all:
     if (_listenKey.length()==0) {
         triggerCreateListenKey();
@@ -502,7 +508,7 @@ void ExchangeBinance::keepAliveListenKey()
     // we have one, does it need to be kept alive? (each 30mins)
     qint64 timeoutMs = 30 *60 *1000; // 30min in ms
     if (QDateTime::currentMSecsSinceEpoch() - _listenKeyCreated.toMSecsSinceEpoch() > timeoutMs ) {
-        qDebug() << __PRETTY_FUNCTION__ << "need to trigger keep alive for listenKey";
+        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "need to trigger keep alive for listenKey";
         QByteArray path("/api/v1/userDataStream");
         QByteArray postData = QString("listenKey=%1").arg(_listenKey).toUtf8();
         if (!triggerApiRequest(path, false, PUT, &postData,
@@ -514,7 +520,7 @@ void ExchangeBinance::keepAliveListenKey()
                     int code = d.object()["code"].toInt();
                     switch(code) {
                     case -1125: // the listen key does not exist (e.g. after 24h)
-                               qDebug() << __PRETTY_FUNCTION__ << "code -1125: deleting listenkey. ws2 connected=" << _isConnectedWs2;
+                               qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "code -1125: deleting listenkey. ws2 connected=" << _isConnectedWs2;
                                if (_isConnectedWs2){
                                     _ws2.close();
                                     _isConnectedWs2 = false;
@@ -522,16 +528,16 @@ void ExchangeBinance::keepAliveListenKey()
                                _listenKey.clear(); // will be created on next call
                                break;
                     default:
-                               qWarning() << __PRETTY_FUNCTION__ << "didn't handle code" << code << d;
+                               qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "didn't handle code" << code << d;
                     }
                 }
-                qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+                qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
                 return;
             }
             _listenKeyCreated = QDateTime::currentDateTime();
 
         })){
-            qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+            qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
         }
     }
 }
@@ -542,23 +548,23 @@ void ExchangeBinance::triggerExchangeInfo()
     if (!triggerApiRequest(path, false, GET, 0,
                            [this](QNetworkReply *reply) {
         if (reply->error() != QNetworkReply::NoError) {
-            qCritical() << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << reply->errorString() << reply->error();
             return;
         }
         QByteArray arr = reply->readAll();
         QJsonDocument d = QJsonDocument::fromJson(arr);
         if (d.isObject()) {
             _exchangeInfo = d.object();
-            qDebug() << __PRETTY_FUNCTION__ << _exchangeInfo["serverTime"];
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _exchangeInfo["serverTime"];
                            // todo we could check here for subscribed pairs!
            if (_exchangeInfo.contains("symbols"))
                updateSymbols(_exchangeInfo["symbols"].toArray());
             printSymbols();
         }
-        qDebug() << __PRETTY_FUNCTION__ << d;
+        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d;
 
     })){
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
 }
 
@@ -570,7 +576,7 @@ void ExchangeBinance::updateSymbols(const QJsonArray &arr)
             const auto &s = se.toObject();
             _symbolMap[s["symbol"].toString()] = s;
         } else
-            qWarning() << __PRETTY_FUNCTION__ << "can't handle " << se;
+            qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "can't handle " << se;
     }
 }
 
@@ -579,7 +585,7 @@ void ExchangeBinance::printSymbols() const
 
     for (const auto &si : _symbolMap) {
         const auto &s = si.second;
-        qDebug() << " " << si.first << s["baseAsset"].toString() << s["quoteAsset"].toString() << s["status"].toString() << s;
+        qCDebug(CeBinance) << " " << si.first << s["baseAsset"].toString() << s["quoteAsset"].toString() << s["status"].toString() << s;
     }
 }
 
@@ -593,13 +599,13 @@ void ExchangeBinance::checkConnectWS()
     if (_listenKey.length()) {
         // are we connected?
         if (!_isConnectedWs2) {
-            qDebug() << __PRETTY_FUNCTION__ << "connecting to ws2";
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "connecting to ws2";
             QString url = QString("wss://stream.binance.com:9443/ws/%1").arg(_listenKey);
             _ws2.open(QUrl(url));
         } else {
             auto curTimeMs = QDateTime::currentMSecsSinceEpoch();
             if (_ws2LastPong && (curTimeMs - _ws2LastPong > 12*1000) ) { // todo const. 12s for now.
-                qWarning() << __PRETTY_FUNCTION__ << "no pong from ws2 since " << (curTimeMs - _ws2LastPong) << "ms";
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "no pong from ws2 since " << (curTimeMs - _ws2LastPong) << "ms";
                 // disconnect ws2:
                 _ws2.close(QWebSocketProtocol::CloseCodeGoingAway);
                 _isConnectedWs2 = false;
@@ -610,7 +616,7 @@ void ExchangeBinance::checkConnectWS()
     }
     // normal ones
     if (!_isConnected) {
-        qDebug() << __PRETTY_FUNCTION__ << "connecting to ws1";
+        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "connecting to ws1";
         QString streams;
         for (const auto &symb : _subscribedChannels) {
             if (streams.length()) streams.append("/");
@@ -624,23 +630,23 @@ void ExchangeBinance::checkConnectWS()
 
 void ExchangeBinance::onWsSslErrors(const QList<QSslError> &errors)
 {
-    qDebug() << __PRETTY_FUNCTION__;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__;
     for (const auto &err : errors) {
-        qDebug() << " " << err.errorString() << err.error();
+        qCDebug(CeBinance) << " " << err.errorString() << err.error();
     }
 }
 
 void ExchangeBinance::onWs2SslErrors(const QList<QSslError> &errors)
 {
-    qDebug() << __PRETTY_FUNCTION__;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__;
     for (const auto &err : errors) {
-        qDebug() << " " << err.errorString() << err.error();
+        qCDebug(CeBinance) << " " << err.errorString() << err.error();
     }
 }
 
 void ExchangeBinance::disconnectWS()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected << _isConnectedWs2;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnected << _isConnectedWs2;
     if (_isConnected)
         _ws.close();
     if (_isConnectedWs2)
@@ -649,14 +655,14 @@ void ExchangeBinance::disconnectWS()
 
 void ExchangeBinance::onWsConnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) return;
     _isConnected = true;
 }
 
 void ExchangeBinance::onWs2Connected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnectedWs2;
     if (_isConnectedWs2) return;
     _ws2LastPong = 0; // none yet, otherwise the last valid pong but might be far too far away...
     _isConnectedWs2 = true;
@@ -666,7 +672,7 @@ void ExchangeBinance::onWs2Connected()
 
 void ExchangeBinance::onWsDisconnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected << _ws.closeReason();
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnected << _ws.closeReason();
     if (_isConnected) {
         _isConnected = false;
     }
@@ -674,7 +680,7 @@ void ExchangeBinance::onWsDisconnected()
 
 void ExchangeBinance::onWs2Disconnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnectedWs2 << _ws2.closeReason();
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnectedWs2 << _ws2.closeReason();
     if (_isConnectedWs2) {
         _isConnectedWs2 = false;
     }
@@ -682,7 +688,7 @@ void ExchangeBinance::onWs2Disconnected()
 
 void ExchangeBinance::onWs2Pong(quint64 elapsedTime, const QByteArray &payload)
 {
-//    qDebug() << __PRETTY_FUNCTION__ << elapsedTime << payload;
+//    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << elapsedTime << payload;
     (void) elapsedTime;
     (void) payload;
     _ws2LastPong = QDateTime::currentMSecsSinceEpoch();
@@ -690,23 +696,23 @@ void ExchangeBinance::onWs2Pong(quint64 elapsedTime, const QByteArray &payload)
 
 void ExchangeBinance::onWs2Error(QAbstractSocket::SocketError err)
 {
-    qDebug() << __PRETTY_FUNCTION__ << err;
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << err;
 }
 
 
 
 void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
 {
-    //qDebug() << __PRETTY_FUNCTION__ << msg;
+    //qCDebug(CeBinance) << __PRETTY_FUNCTION__ << msg;
     QJsonParseError err;
     QJsonDocument d = QJsonDocument::fromJson(msg.toUtf8(), &err);
     if (d.isNull() || err.error != QJsonParseError::NoError) {
-        qWarning() << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error;
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error;
     }
     if (d.isObject()) {
         QString stream = d.object()["stream"].toString();
         const QJsonObject &data = d.object()["data"].toObject();
-        // qDebug() << __PRETTY_FUNCTION__ << stream << data;
+        // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << stream << data;
         // channel data?
         if (stream.contains("@depth")) {
             bool complete = !stream.endsWith("@depth");
@@ -718,7 +724,7 @@ void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
                 if (ch)
                     ch->handleDataFromBinance(data, complete);
             } else {
-                qWarning() << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
             }
         } else
             if (stream.contains("@trade")) {
@@ -730,7 +736,7 @@ void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
                     if (ch)
                         ch->handleDataFromBinance(data, false);
                 } else {
-                    qWarning() << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
+                    qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "couldn't find channel for " << symbol << stream;
                 }
             }
     }
@@ -738,18 +744,18 @@ void ExchangeBinance::onWsTextMessageReceived(const QString &msg)
 
 void ExchangeBinance::onWs2TextMessageReceived(const QString &msg)
 {
-    //qDebug() << __PRETTY_FUNCTION__ << msg; // {\"e\":\"outboundAccountInfo\",\"E\":1519492960683,\"m\":10,\"t\":10,\"b\":0,\"s\":0,\"T\":true,\"W\":true,\"D\":true,\"u\":1519492960682,\"B\":[{\"a\":\"BTC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"LTC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ETH\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BNC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ICO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NEO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"OST\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ELF\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"AION\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"WINGS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BRD\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NEBL\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NAV\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"VIBE\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"LUN\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"TRIG\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"APPC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"CHAT\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"RLC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"INS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"PIVX\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"IOST\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"STEEM\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NANO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"AE\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"VIA\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BLZ\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"SYS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"RPX\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"}]}
+    //qCDebug(CeBinance) << __PRETTY_FUNCTION__ << msg; // {\"e\":\"outboundAccountInfo\",\"E\":1519492960683,\"m\":10,\"t\":10,\"b\":0,\"s\":0,\"T\":true,\"W\":true,\"D\":true,\"u\":1519492960682,\"B\":[{\"a\":\"BTC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"LTC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ETH\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BNC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ICO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NEO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"OST\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"ELF\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"AION\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"WINGS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BRD\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NEBL\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NAV\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"VIBE\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"LUN\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"TRIG\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"APPC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"CHAT\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"RLC\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"INS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"PIVX\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"IOST\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"STEEM\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"NANO\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"AE\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"VIA\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"BLZ\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"SYS\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"},{\"a\":\"RPX\",\"f\":\"0.00000000\",\"l\":\"0.00000000\"}]}
     QJsonParseError err; // todo handle above msgs,
     // todo handle 24h reconnect case
     QJsonDocument d = QJsonDocument::fromJson(msg.toUtf8(), &err);
     if (d.isNull() || err.error != QJsonParseError::NoError) {
-        qWarning() << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error << msg;
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error << msg;
     } else if (d.isObject()) {
         const QJsonObject &obj = d.object();
         if (obj.contains("e")) {
             // event type:
             const QString &event = obj["e"].toString();
-            qDebug() << __PRETTY_FUNCTION__ << event << obj;
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << event << obj;
             if (event == "outboundAccountInfo") {
                 // todo use more info from here!
 
@@ -760,11 +766,11 @@ void ExchangeBinance::onWs2TextMessageReceived(const QString &msg)
                 // order update
                 // todo
             } else {
-                qWarning() << __PRETTY_FUNCTION__ << "unknown event" << event;
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "unknown event" << event;
             }
         }
     } else {
-        qWarning() << __PRETTY_FUNCTION__ << "unexpected msg" << msg << d;
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "unexpected msg" << msg << d;
     }
     // todo
 }
@@ -781,7 +787,7 @@ bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, dou
    feeCur1 = 0.001;
    feeCur2 = 0.001;
 
-   qWarning() << __PRETTY_FUNCTION__ << "returning wrong fees. todo!";
+   qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "returning wrong fees. todo!";
 
     return true;
 }
@@ -837,12 +843,12 @@ bool ExchangeBinance::getStepSize(const QString &pair, int &stepSize) const
                         auto spl = stepStr.split('.');
                         if (spl[0].length()>1) {
                             stepSize = spl[0].length()-1;
-                            qDebug() << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
+                            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
                             return true;
                         }
                         if (spl[0].length()==1 && spl[0] == "1") {
                             stepSize = 0;
-                            qDebug() << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
+                            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
                             return true;
                         }
                         stepSize = -1;
@@ -851,7 +857,7 @@ bool ExchangeBinance::getStepSize(const QString &pair, int &stepSize) const
                             --stepSize;
                             str1.remove(0, 1);
                         }
-                        qDebug() << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
+                        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "ret" << stepSize << "for" << stepStr;
                         return true;
                     }
                 }
@@ -863,7 +869,7 @@ bool ExchangeBinance::getStepSize(const QString &pair, int &stepSize) const
 
 void ExchangeBinance::onChannelTimeout(int id, bool isTimeout)
 {
-    qWarning() << __PRETTY_FUNCTION__ << id << isTimeout;
+    qCWarning(CeBinance) << __PRETTY_FUNCTION__ << id << isTimeout;
     emit channelTimeout(name(), id, isTimeout);
 }
 
@@ -901,7 +907,7 @@ int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const
     int stepSize = -5;
     getStepSize(symbol, stepSize);
     if (stepSize>0) {
-        qWarning() << __PRETTY_FUNCTION__ << "cant' handle stepSize" << stepSize << symbol << amount << price;
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "cant' handle stepSize" << stepSize << symbol << amount << price;
         return 0;
     }
     QString quantityRounded = QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', -stepSize); // todo get 7 from symbol info! LOT_SIZE step
@@ -923,24 +929,24 @@ int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const
                            [this, nextCid, symbol](QNetworkReply *reply) {
         if (reply->error() != QNetworkReply::NoError) {
             QByteArray arr = reply->readAll();
-            qCritical() << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
             emit orderCompleted(name(), nextCid, 0.0, 0.0, QString(arr), symbol, 0.0, QString());
             return;
         }
         QByteArray arr = reply->readAll();
         QJsonDocument d = QJsonDocument::fromJson(arr);
-        qDebug() << __PRETTY_FUNCTION__ << d; // QJsonDocument({"clientOrderId":"1","executedQty":"0.00000000","fills":[],"orderId":24825404,"origQty":"1.00000000","price":"0.00400000","side":"SELL","status":"NEW","symbol":"BNBBTC","timeInForce":"GTC","transactTime":1518901884363,"type":"LIMIT"})
+        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d; // QJsonDocument({"clientOrderId":"1","executedQty":"0.00000000","fills":[],"orderId":24825404,"origQty":"1.00000000","price":"0.00400000","side":"SELL","status":"NEW","symbol":"BNBBTC","timeInForce":"GTC","transactTime":1518901884363,"type":"LIMIT"})
         // QJsonDocument({"clientOrderId":"2","executedQty":"1.00000000","fills":[{"commission":"0.00014788","commissionAsset":"BNB","price":"0.00108180","qty":"1.00000000","tradeId":9579646}],"orderId":24831909,"origQty":"1.00000000","price":"0.00108000","side":"SELL","status":"FILLED","symbol":"BNBBTC","timeInForce":"GTC","transactTime":1518905398324,"type":"LIMIT"})
         if (d.isObject()) {
             _pendingOrdersMap[QString("%1").arg((int)d.object()["orderId"].toDouble())] = nextCid;
             storePendingOrders();
-            qDebug() << __PRETTY_FUNCTION__ << "got orderId(" << nextCid << ")=" << d.object();
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "got orderId(" << nextCid << ")=" << d.object();
         } else {
-          qDebug() << __PRETTY_FUNCTION__ << "no object!: " << d;
+          qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "no object!: " << d;
           emit orderCompleted(name(), nextCid, 0.0, 0.0, QString(arr), symbol, 0.0, QString());
         }
     })){
-        qWarning() << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
     }
     return nextCid;
 }

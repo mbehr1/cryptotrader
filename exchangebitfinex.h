@@ -15,6 +15,7 @@ class QSettings;
 #include "channelaccountinfo.h"
 
 static QString bitfinexName = "Bitfinex";
+Q_DECLARE_LOGGING_CATEGORY(CeBitfinex)
 
 class ExchangeBitfinex : public Exchange
 {

@@ -7,6 +7,7 @@
 #include "exchangenam.h"
 
 static QString binanceName = "binance";
+Q_DECLARE_LOGGING_CATEGORY(CeBinance)
 
 class ExchangeBinance : public ExchangeNam
 {
@@ -31,6 +32,7 @@ public:
 
     typedef enum {Book=0, Trades} CHANNELTYPE;
     std::shared_ptr<Channel> getChannel(const QString &pair, CHANNELTYPE type) const;
+    bool addPair(const QString &symbol);
 signals:
 private Q_SLOTS:
     void onChannelTimeout(int id, bool isTimeout); // from channels
@@ -52,7 +54,6 @@ protected:
     QTimer _queryTimer;
     std::map<QString, std::pair<std::shared_ptr<ChannelBooks>, std::shared_ptr<Channel>>> _subscribedChannels;
 
-    bool addPair(const QString &symbol);
     int _nrChannels;
 
     QWebSocket _ws;

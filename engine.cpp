@@ -337,6 +337,30 @@ Engine::Engine(QObject *parent) : QObject(parent)
 
         _strategies.push_front(strategy);
     }
+    if (1) {
+        std::shared_ptr<StrategyArbitrage> strategy = std::make_shared<StrategyArbitrage>(QString("#a2"), this);
+        connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
+        connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)), this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+
+        // configure it:
+        auto eBinance = std::dynamic_pointer_cast<ExchangeBinance>( _exchanges[binanceName]);
+        assert(eBinance->addPair("XMRBTC"));
+        auto eBitflyer = std::dynamic_pointer_cast<ExchangeBitFlyer>( _exchanges[bitFlyerName]);
+        auto eHitbtc = std::dynamic_pointer_cast<ExchangeHitbtc>( _exchanges[hitbtcName]);
+        assert(eHitbtc->addPair("XMRBTC"));
+
+        strategy->addExchangePair(_exchanges[bitfinexName], "tXMRBTC", "XMR", "BTC");
+        //strategy->addExchangePair(_exchanges[bitFlyerName], "XMR_BTC", "XMR", "BTC");
+        strategy->addExchangePair(_exchanges[binanceName], "XMRBTC", "XMR", "BTC");
+        strategy->addExchangePair(_exchanges[hitbtcName], "XMRBTC", "XMR", "BTC");
+
+        // now add available channels: (put this inside addExchangePair!
+        //strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBitflyer->getChannel("XMR_BTC", ExchangeBitFlyer::Book)));
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBinance->getChannel("XMRBTC", ExchangeBinance::Book)));
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eHitbtc->getChannel("XMRBTC", ExchangeHitbtc::Book)));
+
+        _strategies.push_front(strategy);
+    }
 
 
 
@@ -577,7 +601,7 @@ void Engine::onOrderCompleted(QString exchange, int cid, double amount, double p
 
         if (_telegramBot) {
             for (auto &s : _telegramSubscribers) {
-                if (!_telegramBot->sendMessage(s, botMsg, true))
+                if (!_telegramBot->sendMessage(s, botMsg, false)) // don't use markdown here. symbols might contain e.g. _,...
                     qWarning() << __PRETTY_FUNCTION__ << "failed to sendMessage" << botMsg;
             }
         }

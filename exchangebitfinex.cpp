@@ -10,6 +10,8 @@
 #include <QMessageAuthenticationCode>
 #include "exchangebitfinex.h"
 
+Q_LOGGING_CATEGORY(CeBitfinex, "e.bitfinex")
+
 ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
     Exchange(parent, "cryptotrader_exchangebitfinex")
   , _checkConnectionTimer(this)
@@ -96,7 +98,7 @@ QString ExchangeBitfinex::getStatusMsg() const
 
 void ExchangeBitfinex::connectWS()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) return;
 
     QString url("wss://api2.bitfinex.com:3000/ws/2");
@@ -105,7 +107,7 @@ void ExchangeBitfinex::connectWS()
 
 void ExchangeBitfinex::disconnectWS()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << _isConnected;
     if (!_isConnected) return;
     _ws.close();
     // we don't set this here but wait for disconnected signal _isConnected = false;
@@ -115,7 +117,7 @@ void ExchangeBitfinex::disconnectWS()
 
 void ExchangeBitfinex::onConnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) return;
     _isConnected = true;
     connect(&_ws, &QWebSocket::textMessageReceived,
@@ -127,7 +129,7 @@ void ExchangeBitfinex::onConnected()
 
 void ExchangeBitfinex::onDisconnected()
 {
-    qDebug() << __PRETTY_FUNCTION__ << _isConnected;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) {
         _isConnected = false;
         disconnect(&_ws, &QWebSocket::textMessageReceived,
@@ -178,7 +180,7 @@ bool ExchangeBitfinex::sendAuth(const QString &apiKey,
     QJsonDocument json;
     json.setObject(obj);
     QString msg = json.toJson(QJsonDocument::Compact);
-    // qDebug() << __PRETTY_FUNCTION__ << "send:" << msg;
+    // qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "send:" << msg;
     _isAuth = false;
 
     return _ws.sendTextMessage(msg) == msg.length();
@@ -186,13 +188,13 @@ bool ExchangeBitfinex::sendAuth(const QString &apiKey,
 
 int ExchangeBitfinex::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
-    qDebug() << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden;
     if (!_isConnected) {
-        qWarning() << __FUNCTION__ << "not connected!";
+        qCWarning(CeBitfinex) << __FUNCTION__ << "not connected!";
         return -1;
     }
     if (!_isAuth) {
-        qWarning() << __FUNCTION__ << "not auth!";
+        qCWarning(CeBitfinex) << __FUNCTION__ << "not auth!";
         return -2;
     }
 
@@ -213,10 +215,10 @@ int ExchangeBitfinex::newOrder(const QString &symbol, const double &amount, cons
     QJsonDocument json;
     json.setArray(arr);
     QString msg = json.toJson(QJsonDocument::Compact);
-    qDebug() << __PRETTY_FUNCTION__ << "sending:" << msg;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "sending:" << msg;
     auto len =  _ws.sendTextMessage(msg);
     if (len != msg.length()) {
-        qWarning() << __FUNCTION__ << "couldn't send msg" << len << msg.length();
+        qCWarning(CeBitfinex) << __FUNCTION__ << "couldn't send msg" << len << msg.length();
         return -3;
     } else return cid;
 }
@@ -231,14 +233,14 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
         innerMsg.append(QString(", \"%1\": \"%2\"").arg(it.first, it.second));
     }
     QString subMsg(QString("{%1}").arg(innerMsg));
-    qDebug() << __PRETTY_FUNCTION__ << subMsg;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << subMsg;
     _ws.sendTextMessage(subMsg);
     return true;
 }
 
 void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
 {
-    qWarning() << __PRETTY_FUNCTION__ << id;
+    qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << id << isTimeout;
     // todo handle this here? resubscribe? check connection? disconnect/reconnect?
     // forward
     emit channelTimeout(name(), id, isTimeout);
@@ -248,7 +250,7 @@ void ExchangeBitfinex::onChannelTimeout(int id, bool isTimeout)
 
 void ExchangeBitfinex::onTextMessageReceived(const QString &message)
 {
-    //qDebug() << __PRETTY_FUNCTION__ << message;
+    //qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << message;
     //QString msgCopy = message;
     //msgCopy.append(' '); // modify to create real copy and not shallow todo only until we find real root cause for those duplicate msgs
     parseJson(message);
@@ -256,13 +258,13 @@ void ExchangeBitfinex::onTextMessageReceived(const QString &message)
 
 void ExchangeBitfinex::onOrderCompleted(int cid, double amount, double price, QString status, QString pair, double fee, QString feeCur)
 {
-    qDebug() << __PRETTY_FUNCTION__ << cid << amount << pair << price << status << fee << feeCur;
+    qCInfo(CeBitfinex) << __PRETTY_FUNCTION__ << cid << amount << pair << price << status << fee << feeCur;
     emit orderCompleted(name(), cid, amount, price, status, pair, fee, feeCur);
 }
 
 void ExchangeBitfinex::onSslErrors(const QList<QSslError> &errors)
 {
-    qDebug() << __FUNCTION__ << errors.count();
+    qCWarning(CeBitfinex) << __FUNCTION__ << errors.count();
 }
 
 void ExchangeBitfinex::parseJson(const QString &msg)
@@ -276,12 +278,12 @@ void ExchangeBitfinex::parseJson(const QString &msg)
             // call ourself twice:
             QString msg1 = utf8Msg.left(err.offset);
             QString msg2 = utf8Msg.right(utf8Msg.length() - err.offset);
-            qDebug() << __PRETTY_FUNCTION__ << "splitting into" << msg1 << "and" << msg2;
+            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "splitting into" << msg1 << "and" << msg2;
             parseJson(msg1);
             parseJson(msg2);
             return;
         }
-        qDebug() << __PRETTY_FUNCTION__ << "json parse error:" << err.errorString() << err.error << err.offset << msg;
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "json parse error:" << err.errorString() << err.error << err.offset << msg;
         return;
     }
     // valid json here:
@@ -299,38 +301,38 @@ void ExchangeBitfinex::parseJson(const QString &msg)
                     handleSubscribedEvent(obj);
                 } else
                     if (evVString.compare("conf")==0) {
-                        qDebug() << "TODO got conf!";
+                        qCDebug(CeBitfinex) << "TODO got conf!";
                     } else
                     if (evVString.compare("pong")==0) {
-                        qDebug() << "TODO got pong!";
+                        qCDebug(CeBitfinex) << "TODO got pong!";
                     } else
                         if (evVString.compare("auth")==0) {
                             handleAuthEvent(obj);
                         } else
-                            qDebug() << __PRETTY_FUNCTION__ << "TODO unknown event:" << evValue.toString() << obj;
+                            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "TODO unknown event:" << evValue.toString() << obj;
         } else {
             // no event
-            qDebug() << "TODO unknown (no event) json object:" << obj;
+            qCWarning(CeBitfinex) << "TODO unknown (no event) json object:" << obj;
         }
     } else
         if (json.isArray()) {
-            //qDebug() << __PRETTY_FUNCTION__ << "got json array with size" << json.array().size();
+            //qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "got json array with size" << json.array().size();
             handleChannelData(json.array());
         } else {
-            qDebug() << __PRETTY_FUNCTION__ << "json neither object nor array!" << json;
+            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "json neither object nor array!" << json;
         }
 
 }
 
 void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 {
-    qDebug() << __PRETTY_FUNCTION__ << obj;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
     _isAuth = obj["status"]=="OK";
 
     // todo send this to ChannelAccountInfo?
 
     if (obj["caps"].toObject()["orders"].toObject()["write"]!=1)
-        qWarning() << "no write orders allowed! Check API key!";
+        qCWarning(CeBitfinex) << "no write orders allowed! Check API key!";
 
     // now do subscribes (todo find better way to queue (and wait for answers...)
     (void) /* todo err hdlg */ subscribeChannel("trades", "tBTCUSD");
@@ -338,6 +340,8 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
     (void) subscribeChannel("trades", "tXRPUSD");
     (void) subscribeChannel("trades", "tBCHBTC");
     (void) subscribeChannel("trades", "tETHBTC");
+    (void) subscribeChannel("trades", "tXMRBTC");
+
     std::map<QString, QString> options;
     options.insert(std::make_pair<QString, QString>("prec", "P0"));
     options.insert(std::make_pair<QString, QString>("freq", "F0"));
@@ -348,25 +352,27 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
     (void) subscribeChannel("book", "tXRPUSD", options);
     (void) subscribeChannel("book", "tBCHBTC", options);
     (void) subscribeChannel("book", "tETHBTC", options);
+    (void) subscribeChannel("book", "tXMRBTC", options);
+
 
     emit exchangeStatus(name(), false, false);
 }
 
 void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
 {
-    qDebug() << __PRETTY_FUNCTION__ << obj;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
     assert(obj["event"]=="info");
 
     // need to send auth on version info only
     if (!_isAuth && obj.contains("version")) { // _apiKey.length()) {
 
         if (obj["version"].toInt() != 2) {
-            qWarning() << __PRETTY_FUNCTION__ << "tested with version 2 only. got" << obj;
+            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "tested with version 2 only. got" << obj;
             subscriberMsg(QString("*unknown version!* (%1)").arg(QJsonDocument(obj).toJson().toStdString().c_str()));
         }
 
         if (!sendAuth(_apiKey, _sKey))
-            qWarning() << __FUNCTION__ << "failed to send Auth!";
+            qCWarning(CeBitfinex) << __FUNCTION__ << "failed to send Auth!";
         else {
             // we need to keep in ram for reconnect/reauth remove from RAM
             if (0) {
@@ -400,7 +406,7 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
             break;
         default:
             subscriberMsg(QString("*unknown code!* not handled. (%1)").arg(QJsonDocument(obj).toJson().toStdString().c_str()));
-            qDebug() << __PRETTY_FUNCTION__ << "unknown code" << code;
+            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "unknown code" << code;
             break;
         }
     }
@@ -409,7 +415,7 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
 
 void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
 {
-    qDebug() << __PRETTY_FUNCTION__ << obj;
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
     if (!obj.isEmpty()) {
         int channelId = obj["chanId"].toInt();
         QString channel = obj["channel"].toString();
@@ -422,7 +428,7 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
                 if (ch->channel() == channel &&
                         ch->symbol() == symbol) {
                     int idOld = ch->id();
-                    qDebug() << __PRETTY_FUNCTION__ << "found old channel" << idOld << "reusing as " << channelId;
+                    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "found old channel" << idOld << "reusing as " << channelId;
                     if (idOld != channelId) {
                         ch->setId(channelId);
                         _subscribedChannels.insert(std::make_pair(channelId, ch));
@@ -435,7 +441,7 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
             // check whether this channel exists already:
             auto it = _subscribedChannels.find(channelId);
             if (it!= _subscribedChannels.end()) {
-                qWarning() << __PRETTY_FUNCTION__ << "channel" << channelId << "exists already. Deleting existing.";
+                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "channel" << channelId << "exists already. Deleting existing.";
                 (*it).second->_isSubscribed = false;
                 // todo emit signal that this channel is deleted!
                 _subscribedChannels.erase(it);
@@ -456,16 +462,16 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
             connect(&(*ptr), SIGNAL(timeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
         } else
             if (channelId == 0) { // account info
-                qDebug() << __PRETTY_FUNCTION__ << "account info" << obj;
+                qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "account info" << obj;
             } else
-                qWarning() << __PRETTY_FUNCTION__ << "obj contains invalid data!";
+                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "obj contains invalid data!";
 
-    } else qWarning() << __PRETTY_FUNCTION__ << "empty obj";
+    } else qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "empty obj";
 }
 
 void ExchangeBitfinex::handleChannelData(const QJsonArray &data)
 {
-//    qDebug() << __PRETTY_FUNCTION__ << data;
+//    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << data;
     if (!data.isEmpty()) {
         // we expect at least the channel id and one action
         if (data.count() >= 2) {
@@ -478,14 +484,14 @@ void ExchangeBitfinex::handleChannelData(const QJsonArray &data)
             } else
                 if (channelId == 0) {
                     // account info
-                    //qDebug() << __PRETTY_FUNCTION__ << "account info:" << data;
+                    //qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "account info:" << data;
                     _accountInfoChannel.handleChannelData(data); // no emit. will send on its own
                 } else
                 {
-                    qWarning() << __FUNCTION__ << "data for unknown channel" << channelId << data;
+                    qCWarning(CeBitfinex) << __FUNCTION__ << "data for unknown channel" << channelId << data;
                 }
         } else
-            qWarning() << __PRETTY_FUNCTION__ << "array too small:" << data;
+            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "array too small:" << data;
     } else
-        qWarning() << __PRETTY_FUNCTION__ << "got empty array!";
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "got empty array!";
 }
