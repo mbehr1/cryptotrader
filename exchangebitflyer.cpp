@@ -172,6 +172,13 @@ bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, do
     return false;
 }
 
+bool ExchangeBitFlyer::getMinOrderValue(const QString &pair, double &minAmount) const
+{
+    (void)pair;
+    (void)minAmount;
+    return false; // todo
+}
+
 bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount) const
 {
     if (pair.startsWith("BCH")) {

@@ -455,6 +455,13 @@ bool ExchangeHitbtc::getMinAmount(const QString &pair, double &amount) const
     return true;
 }
 
+bool ExchangeHitbtc::getMinOrderValue(const QString &pair, double &minValue) const
+{
+    (void) pair;
+    (void)minValue;
+    return false; // nothing known yet
+}
+
 void ExchangeHitbtc::triggerGetBalances()
 {
     // subscribe data:

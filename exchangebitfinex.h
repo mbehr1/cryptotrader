@@ -10,14 +10,14 @@
 #include <QtWebSockets/QtWebSockets>
 class QSettings;
 
-#include "exchange.h"
+#include "exchangenam.h"
 #include "channel.h"
 #include "channelaccountinfo.h"
 
 static QString bitfinexName = "Bitfinex";
 Q_DECLARE_LOGGING_CATEGORY(CeBitfinex)
 
-class ExchangeBitfinex : public Exchange
+class ExchangeBitfinex : public ExchangeNam
 {
     Q_OBJECT
 public:
@@ -38,10 +38,13 @@ public:
                   ) override;
     virtual void reconnect() override;
     virtual bool getMinAmount(const QString &pair, double &oAmount) const override;
+    virtual bool getMinOrderValue(const QString &pair, double &minValue) const override;
     virtual bool getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount = 0.0, bool makerFee=false) override;
 
 signals:
 
+protected:
+    virtual bool finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData) override;
 private Q_SLOTS:
     void onConnected();
     void onDisconnected();
@@ -59,6 +62,8 @@ private:
     void handleInfoEvent(const QJsonObject &obj);
     void handleSubscribedEvent(const QJsonObject &obj);
     void handleChannelData(const QJsonArray &data);
+    bool getSymbolDetails();
+    QJsonArray _symbolDetails;
 
     QWebSocket _ws;
     QTimer _checkConnectionTimer;

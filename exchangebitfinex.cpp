@@ -13,7 +13,7 @@
 Q_LOGGING_CATEGORY(CeBitfinex, "e.bitfinex")
 
 ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
-    Exchange(parent, "cryptotrader_exchangebitfinex")
+    ExchangeNam(parent, "cryptotrader_exchangebitfinex")
   , _checkConnectionTimer(this)
   , _accountInfoChannel(this)
 {
@@ -78,11 +78,27 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
     return true;
 }
 
+bool ExchangeBitfinex::getMinOrderValue(const QString &pair, double &minValue) const
+{
+    (void)pair;
+    (void)minValue;
+    // not avail. info
+    return false;
+}
+
 bool ExchangeBitfinex::getMinAmount(const QString &pair, double &oAmount) const
 {
-    if (pair.endsWith("BCHBTC")) {
-        oAmount = 0.02;
-        return true;
+    // check whether it exists in _symbolDetails
+    const QString lowerPair = pair.toLower();
+    for (const auto &symb : _symbolDetails)
+    {
+        if (symb.isObject()) {
+            const QJsonObject &sym = symb.toObject();
+            if (sym["pair"].toString().toLower() == lowerPair) {
+                oAmount = sym["minimum_order_size"].toString().toDouble();
+                return true;
+            }
+        }
     }
     return false;
 }
@@ -186,6 +202,24 @@ bool ExchangeBitfinex::sendAuth(const QString &apiKey,
     return _ws.sendTextMessage(msg) == msg.length();
 }
 
+bool ExchangeBitfinex::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)
+{
+    (void)postData;
+    (void)reqType;
+    QString fullPath = path;
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (doSign) {
+        assert(false); // nyi
+    }
+
+    QString fullUrl("https://api.bitfinex.com");
+    fullUrl.append(fullPath);
+    url.setUrl(fullUrl, QUrl::StrictMode);
+    req.setUrl(url);
+
+    return true;
+}
+
 int ExchangeBitfinex::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden;
@@ -235,6 +269,33 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
     QString subMsg(QString("{%1}").arg(innerMsg));
     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << subMsg;
     _ws.sendTextMessage(subMsg);
+    return true;
+}
+
+bool ExchangeBitfinex::getSymbolDetails()
+{
+    // not avail via websocket api... use rest api
+    if (!triggerApiRequest("/v1/symbols_details",
+                           false, GET, 0,
+                           [this](QNetworkReply *reply) {
+                           QByteArray arr = reply->readAll();
+                            if (reply->error() != QNetworkReply::NoError) {
+                                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+                                return;
+                            }
+                            QJsonDocument d = QJsonDocument::fromJson(arr);
+                            if (d.isArray())
+                                _symbolDetails = d.array();
+                           else
+                            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "can't handle. expect array:" << d;
+                           // test it:
+                            double minAmount = -1.0;
+                           (void)getMinAmount("XMRBTC", minAmount);
+                            qCDebug(CeBitfinex) << "min amount for XMRBTC=" << minAmount;
+                            })) {
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        return false;
+    }
     return true;
 }
 
@@ -333,6 +394,8 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 
     if (obj["caps"].toObject()["orders"].toObject()["write"]!=1)
         qCWarning(CeBitfinex) << "no write orders allowed! Check API key!";
+
+    (void)getSymbolDetails();
 
     // now do subscribes (todo find better way to queue (and wait for answers...)
     (void) /* todo err hdlg */ subscribeChannel("trades", "tBTCUSD");

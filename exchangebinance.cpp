@@ -792,6 +792,34 @@ bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, dou
     return true;
 }
 
+bool ExchangeBinance::getMinOrderValue(const QString &pair, double &minValue) const
+{
+    // search in symbols.
+    const auto &si = _symbolMap.find(pair);
+    if (si != _symbolMap.cend()) {
+        // use filter MIN_NOTIONAL
+        // QJsonObject({"baseAsset":"ETH","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000100","tickSize":"0.00000100"},{"filterType":"LOT_SIZE","maxQty":"100000.00000000","minQty":"0.00100000","stepSize":"0.00100000"},
+        //{"filterType":"MIN_NOTIONAL","minNotional":"0.00100000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"BTC","quotePrecision":8,"status":"TRADING","symbol":"ETHBTC"})
+        // QJsonObject({"baseAsset":"BNB","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000010","tickSize":"0.00000010"},{"filterType":"LOT_SIZE","maxQty":"90000000.00000000","minQty":"0.01000000","stepSize":"0.01000000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.00100000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"BTC","quotePrecision":8,"status":"TRADING","symbol":"BNBBTC"})
+        // QJsonObject({"baseAsset":"BNB","baseAssetPrecision":8,"filters":[{"filterType":"PRICE_FILTER","maxPrice":"100000.00000000","minPrice":"0.00000100","tickSize":"0.00000100"},{"filterType":"LOT_SIZE","maxQty":"90000000.00000000","minQty":"0.01000000","stepSize":"0.01000000"},{"filterType":"MIN_NOTIONAL","minNotional":"0.01000000"}],"icebergAllowed":true,"orderTypes":["LIMIT","LIMIT_MAKER","MARKET","STOP_LOSS_LIMIT","TAKE_PROFIT_LIMIT"],"quoteAsset":"ETH","quotePrecision":8,"status":"TRADING","symbol":"BNBETH"})
+
+        const auto &s = (*si).second;
+        if (s["filters"].isArray()) {
+            for (const auto &fi : s["filters"].toArray()) {
+                if (fi.isObject()) {
+                    const auto &f = fi.toObject();
+                    if (f["filterType"] == "MIN_NOTIONAL") {
+                        assert(f.contains("minNotional"));
+                        minValue = f["minNotional"].toString().toDouble();
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 bool ExchangeBinance::getMinAmount(const QString &pair, double &amount) const
 {
     // search in symbols.
