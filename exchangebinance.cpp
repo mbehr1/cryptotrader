@@ -926,6 +926,23 @@ QString ExchangeBinance::getStatusMsg() const
     return toRet;
 }
 
+bool ExchangeBinance::getAvailable(const QString &cur, double &available) const
+{
+    for (const auto &bal : _meBalances) {
+        if (bal.isObject()) {
+            const auto &b = bal.toObject();
+            bool shortFormat = b.contains("a");
+            if (cur == b[shortFormat ? "a" : "asset"].toString()) {
+                available = b[shortFormat ? "f" : "free"].toString().toDouble();
+                qCDebug(CeBinance) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
+                return true;
+            }
+        }
+    }
+    qCWarning(CeBinance) << __PRETTY_FUNCTION__ << cur << "returning false!";
+    return false;
+}
+
 int ExchangeBinance::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
     QByteArray path("/api/v3/order");

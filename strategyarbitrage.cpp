@@ -336,8 +336,33 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             if (eSell._book->exchange()->getMinAmount(eSell._pair, minTemp)) {
                                 if (minTemp > minAmount) minAmount = minTemp;
                             }
+                            // check if really enough cur1 is available on eSell:
+                            if (eSell._book->exchange()->getAvailable(eSell._cur1, minTemp)) {
+                                if (amountSellCur1 >= minTemp) {
+                                    qCDebug(CsArb) << "reduced amount to sell due to not enough available from" << amountSellCur1 << "to" << minTemp << eSell._name;
+                                    amountSellCur1 = minTemp;
+                                    amountBuyCur1 = amountSellCur1 * 1.0042;
+                                }
+                            }
+
                             if (eBuy._book->exchange()->getMinAmount(eBuy._pair, minTemp)) {
                                 if (minTemp > minAmount) minAmount = minTemp;
+                            }
+
+                            // check if really enough cur2 to buy is available on eBuy:
+                            if (eBuy._book->exchange()->getAvailable(eBuy._cur2, minTemp)) {
+                                if ((amountBuyCur1*priceBuy * 1.001) >= minTemp) {
+                                    if (priceBuy!= 0.0)
+                                        amountBuyCur1 = minTemp / (priceBuy * 1.001);
+                                    else amountBuyCur1 = 0.0;
+                                    amountSellCur1 = amountBuyCur1 / 1.0042;
+                                    amountBuyCur1 = amountSellCur1 * 1.0042;
+                                    qCDebug(CsArb) << "reduced amount to buy due to not enough available to" << amountBuyCur1 << eBuy._name;
+                                    if ((amountBuyCur1*priceBuy * 1.001) > minTemp) {
+                                        qCWarning(CsArb) << "calc error! Reduced to 0" << amountBuyCur1 << priceBuy << minTemp << eBuy._name << eBuy._cur2;
+                                        amountSellCur1 = 0.0;
+                                    }
+                                }
                             }
 
                             if (amountSellCur1>= minAmount) {

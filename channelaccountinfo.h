@@ -14,6 +14,7 @@ public:
     virtual ~ChannelAccountInfo();
     virtual bool handleChannelData(const QJsonArray &data) override;
     virtual QString getStatusMsg() const override;
+    virtual bool walletGetAvailable(const QString &cur, double &amount) const;
 
     class OrderItem
     {

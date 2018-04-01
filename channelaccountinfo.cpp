@@ -82,6 +82,23 @@ QString ChannelAccountInfo::getStatusMsg() const
     return toRet;
 }
 
+bool ChannelAccountInfo::walletGetAvailable(const QString &cur, double &amount) const
+{
+    for (const auto &wt : _wallet) {
+        if (wt.first == "exchange") {
+            for (const auto &cur2 : wt.second) {
+                if (cur2.first == cur) {
+                    amount = cur2.second;
+                    qDebug() << __PRETTY_FUNCTION__ << cur << "returning true with" << amount;
+                    return true;
+                }
+            }
+        }
+    }
+    qWarning() << __PRETTY_FUNCTION__ << cur << "returning false!";
+    return false;
+}
+
 bool ChannelAccountInfo::handleChannelData(const QJsonArray &data)
 {
     if (Channel::handleChannelData(data)) {

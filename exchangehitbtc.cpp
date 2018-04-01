@@ -791,6 +791,22 @@ QString ExchangeHitbtc::getStatusMsg() const
     return toRet;
 }
 
+bool ExchangeHitbtc::getAvailable(const QString &cur, double &available) const
+{
+    for (const auto &ba : _meBalances) {
+        if (ba.isObject()) {
+            const auto &b = ba.toObject();
+            if (b["currency"].toString() == cur) {
+                available = b["available"].toString().toDouble();
+                qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
+                return true;
+            }
+        }
+    }
+    qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << cur << "returning false!";
+    return false;
+}
+
 int ExchangeHitbtc::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
 

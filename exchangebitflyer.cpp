@@ -730,6 +730,27 @@ QString ExchangeBitFlyer::getStatusMsg() const
     return toRet;
 }
 
+bool ExchangeBitFlyer::getAvailable(const QString &cur, double &available) const
+{
+    for (const auto &ma : _meBalancesMap) {
+        const auto &m = ma.second;
+        if (ma.first == QStringLiteral("exchange")) {
+            for (const auto &cu : m) {
+                const QJsonObject &b = cu.toObject();
+                if (b["currency_code"] == cur) {
+                    bool hasAvailable = b.contains("available");
+                    double bAmount = hasAvailable ? b["available"].toDouble() : b["amount"].toDouble();
+                    available = bAmount; // todo what's difference between amount and avail? only one should be used on exchange
+                    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
+                    return true;
+                }
+            }
+        }
+    }
+    qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << cur << "returning false!";
+    return false;
+}
+
 int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, const double &price, const QString &type, int hidden)
 {
     QString priceRounded = QString("%1").arg(price, 0, 'f', 5);

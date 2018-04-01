@@ -62,6 +62,11 @@ void ExchangeBitfinex::reconnect()
     disconnectWS();
 }
 
+bool ExchangeBitfinex::getAvailable(const QString &cur, double &available) const
+{
+    return _accountInfoChannel.walletGetAvailable(cur, available);
+}
+
 bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount, bool makerFee)
 {
     (void) pair; // independently for now

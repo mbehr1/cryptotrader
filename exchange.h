@@ -25,6 +25,7 @@ public:
     virtual QString getStatusMsg() const = 0;
     virtual void reconnect() = 0;
     virtual void setAuthData(const QString &api, const QString &skey);
+    virtual bool getAvailable(const QString &cur, double &available) const = 0;
     virtual bool getMinAmount(const QString &pair, double &amount) const = 0; // min for sell/buy for this pair. e.g. 0.02 for BCHBTC
     virtual bool getMinOrderValue(const QString &pair, double &minValue) const = 0;
     virtual bool getFee(bool buy, const QString &pair, double &feeCur1, double &feeCur2, double amount = 0.0, bool makerFee=false) = 0; // fees are returned as factor, e.g. 0.002 for 0.2%
