@@ -339,25 +339,44 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             if (eBuy._book->exchange()->getMinAmount(eBuy._pair, minTemp)) {
                                 if (minTemp > minAmount) minAmount = minTemp;
                             }
-                            // todo check minValues (amount*price) as well
+
                             if (amountSellCur1>= minAmount) {
-                                QString str;
+                                // check minValues (amount*price) as well
+                                bool tooLowOrderValue = false;
+                                double minOrderValue;
+                                if (eSell._book->exchange()->getMinOrderValue(eSell._pair, minOrderValue)) {
+                                    if ((amountSellCur1 * priceSell * 0.999)< minOrderValue) {
+                                        tooLowOrderValue = true;
+                                        qCDebug(CsArb) << "too low order value for" << eSell._name << eSell._pair << amountSellCur1 << priceSell*0.999 << minOrderValue;
+                                    }
+                                }
+                                if (eBuy._book->exchange()->getMinOrderValue(eBuy._pair, minOrderValue)) {
+                                    if ((amountBuyCur1 * priceBuy * 1.001) < minOrderValue) {
+                                        tooLowOrderValue = true;
+                                        qCDebug(CsArb) << "too low order value for" << eBuy._name << eBuy._pair << amountBuyCur1 << priceBuy*1.001 << minOrderValue;
+                                    }
+                                }
+                                if (!tooLowOrderValue) {
+                                    QString str;
 
-                                str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(eSell._cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(eSell._cur2).arg(eSell._name);
-                                _lastStatus.append(str);
-                                qCWarning(CsArb) << str << eSell._book->symbol();
-                                emit subscriberMsg(str);
-                                str = QString("buy %1 %2 for %3 %4 at %5").arg(amountBuyCur1).arg(eBuy._cur1).arg(amountBuyCur1*priceBuy).arg(eBuy._cur2).arg(eBuy._name);
-                                _lastStatus.append(str);
-                                qCWarning(CsArb) << str << eBuy._book->symbol();
-                                emit subscriberMsg(str);
+                                    str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(eSell._cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(eSell._cur2).arg(eSell._name);
+                                    _lastStatus.append(str);
+                                    qCWarning(CsArb) << str << eSell._book->symbol();
+                                    emit subscriberMsg(str);
+                                    str = QString("buy %1 %2 for %3 %4 at %5").arg(amountBuyCur1).arg(eBuy._cur1).arg(amountBuyCur1*priceBuy).arg(eBuy._cur2).arg(eBuy._name);
+                                    _lastStatus.append(str);
+                                    qCWarning(CsArb) << str << eBuy._book->symbol();
+                                    emit subscriberMsg(str);
 
-                                // buy:
-                                eBuy._waitForOrder = true;
-                                emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, amountBuyCur1, priceBuy * 1.001); // slightly higher price for higher rel.
-                                // sell:
-                                eSell._waitForOrder = true;
-                                emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, amountSellCur1, priceSell * 0.999); // slightly lower price for higher rel.
+                                    // buy:
+                                    eBuy._waitForOrder = true;
+                                    emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, amountBuyCur1, priceBuy * 1.001); // slightly higher price for higher rel.
+                                    // sell:
+                                    eSell._waitForOrder = true;
+                                    emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, amountSellCur1, priceSell * 0.999); // slightly lower price for higher rel.
+                                } else {
+                                    _lastStatus.append("wanted to buy but too low order value!");
+                                }
                             } else {
                                 _lastStatus.append(QString("\nwould like to sell %3 at %1 and buy at %2 but don't enough money.").arg(eSell._name).arg(eBuy._name).arg(eSell._cur1));
                             }
