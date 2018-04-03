@@ -67,6 +67,9 @@ private:
     bool getSymbolDetails();
     QJsonArray _symbolDetails;
 
+    bool getAccountSummary();
+    QJsonObject _accountSummary;
+
     QWebSocket _ws;
     QTimer _checkConnectionTimer;
     ChannelAccountInfo _accountInfoChannel;

@@ -72,7 +72,13 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
     (void) pair; // independently for now
     (void) amount; // indep for now
     (void) pair; // we ignore it and return same values for all
-    double feeFactor = makerFee ? 0.001 : 0.002;
+
+    if (!_accountSummary.contains("maker_fee") || !_accountSummary.contains("taker_fee")) {
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__  << "invalid accountsummary" << _accountSummary;
+        return false;
+    }
+
+    double feeFactor = _accountSummary[makerFee ? "maker_fee" : "taker_fee"].toDouble(); //   makerFee ? 0.001 : 0.002;
     if (buy) {
         feeCur1 = feeFactor;
         feeCur2 = 0.0;
@@ -214,7 +220,14 @@ bool ExchangeBitfinex::finishApiRequest(QNetworkRequest &req, QUrl &url, bool do
     QString fullPath = path;
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     if (doSign) {
-        assert(false); // nyi
+        // X-BFX-APIKEY
+        req.setRawHeader(QByteArray("X-BFX-APIKEY"), _apiKey.toUtf8());
+        if (!postData) return false;
+        QByteArray payload = postData->toBase64();
+        req.setRawHeader(QByteArray("X-BFX-PAYLOAD"), payload);
+        QString signature = QMessageAuthenticationCode::hash(payload, _sKey.toUtf8(),
+                                                             QCryptographicHash::Sha384).toHex();
+        req.setRawHeader(QByteArray("X-BFX-SIGNATURE"), signature.toUtf8());
     }
 
     QString fullUrl("https://api.bitfinex.com");
@@ -274,6 +287,39 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
     QString subMsg(QString("{%1}").arg(innerMsg));
     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << subMsg;
     _ws.sendTextMessage(subMsg);
+    return true;
+}
+
+bool ExchangeBitfinex::getAccountSummary()
+{
+    QJsonObject o;
+    o["request"] = QStringLiteral("/v1/summary");
+    o["nonce"] = QString("%1").arg(QDateTime::currentMSecsSinceEpoch());
+    QJsonDocument d;
+    d.setObject(o);
+    QByteArray postData(d.toJson());
+    if (!triggerApiRequest("/v1/summary",
+                           true, POST, &postData,
+                           [this](QNetworkReply *reply) {
+                           QByteArray arr = reply->readAll();
+                            if (reply->error() != QNetworkReply::NoError) {
+                                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << arr;
+                                return;
+                            }
+                            QJsonDocument d = QJsonDocument::fromJson(arr);
+                            if (d.isObject()) {
+                                _accountSummary = d.object();
+                                { // try getFee
+                                    double feeCur1 = -1.0, feeCur2 = feeCur1;
+                                    (void) getFee(true, "tETHBTC", feeCur1, feeCur2, 1.0, false);
+                                    qCDebug(CeBitfinex) << "fee for buy tETHBTC non maker=" << feeCur1 << feeCur2;
+                                }
+                            } else
+                                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "can't handle. Expect object" << d;
+                            })) {
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
+        return false;
+    }
     return true;
 }
 
@@ -400,6 +446,7 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
     if (obj["caps"].toObject()["orders"].toObject()["write"]!=1)
         qCWarning(CeBitfinex) << "no write orders allowed! Check API key!";
 
+    (void)getAccountSummary();
     (void)getSymbolDetails();
 
     // now do subscribes (todo find better way to queue (and wait for answers...)
