@@ -44,6 +44,8 @@ private Q_SLOTS:
     void onWsDisconnected(); // from _ws
     void onWsSslErrors(const QList<QSslError> &errors); // from _ws
     void onWsTextMessageReceived(const QString &msg); // from _ws
+    void onWsPong(quint64, const QByteArray &); // from _ws
+    void onWsError(QAbstractSocket::SocketError); // from _ws
     void onWs2Connected(); // from _ws2
     void onWs2Disconnected(); // from _ws2
     void onWs2SslErrors(const QList<QSslError> &errors); // from _ws2
@@ -59,8 +61,10 @@ protected:
 
     int _nrChannels;
 
+    bool _lastOnline; // _isConnected and _isConnectedWs2 and _isAuth
     QWebSocket _ws;
     QWebSocket _ws2; // for listenkey
+    qint64 _wsLastPong; // abs time in ms from last pong
     qint64 _ws2LastPong; // abs time in ms from last pong
     bool _isConnectedWs2;
     void checkConnectWS();

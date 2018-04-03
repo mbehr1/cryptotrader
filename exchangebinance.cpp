@@ -14,7 +14,7 @@ Q_LOGGING_CATEGORY(CeBinance, "e.binance")
 
 ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebinance")
-  , _nrChannels(0), _ws2LastPong(0), _isConnectedWs2(false)
+  , _nrChannels(0), _lastOnline(false), _wsLastPong(0), _ws2LastPong(0), _isConnectedWs2(false)
 {
     qCDebug(CeBinance) << __PRETTY_FUNCTION__ << name();
 
@@ -33,6 +33,9 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
     typedef void (QWebSocket:: *sslErrorsSignal)(const QList<QSslError> &);
     assert(connect(&_ws, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBinance::onWsSslErrors));
     assert(connect(&_ws, SIGNAL(textMessageReceived(QString)), this, SLOT(onWsTextMessageReceived(QString))));
+    assert(connect(&_ws, SIGNAL(pong(quint64,QByteArray)), this, SLOT(onWsPong(quint64, QByteArray))));
+    assert(connect(&_ws, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWsError(QAbstractSocket::SocketError))));
+
 
     assert(connect(&_ws2, &QWebSocket::connected, this, &ExchangeBinance::onWs2Connected));
     assert(connect(&_ws2, &QWebSocket::disconnected, this, &ExchangeBinance::onWs2Disconnected));
@@ -433,7 +436,7 @@ void ExchangeBinance::triggerGetMyTrades(const QString &symbol)
 void ExchangeBinance::updateTrades(const QString &symbol, const QJsonArray &arr)
 {
     if (arr == _meTradesCache[symbol]) return;
-    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << symbol << arr;
+    //qCDebug(CeBinance) << __PRETTY_FUNCTION__ << symbol << arr;
     _meTradesCache[symbol] = arr;
 
     auto &map = _meTradesMapMap[symbol];
@@ -479,7 +482,7 @@ void ExchangeBinance::triggerCreateListenKey()
                            [this](QNetworkReply *reply) {
         if (reply->error() != QNetworkReply::NoError) {
             qCCritical(CeBinance) << __PRETTY_FUNCTION__ << (int)reply->error() << reply->errorString() << reply->error() << reply->readAll();
-                           assert(false);
+                           //assert(false);
             return;
         }
         QByteArray arr = reply->readAll();
@@ -559,9 +562,9 @@ void ExchangeBinance::triggerExchangeInfo()
                            // todo we could check here for subscribed pairs!
            if (_exchangeInfo.contains("symbols"))
                updateSymbols(_exchangeInfo["symbols"].toArray());
-            printSymbols();
-        }
-        qCDebug(CeBinance) << __PRETTY_FUNCTION__ << d;
+            //printSymbols();
+        } else
+          qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "can't handle" << d;
 
     })){
         qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
@@ -604,6 +607,15 @@ void ExchangeBinance::checkConnectWS()
             _ws2.open(QUrl(url));
         } else {
             auto curTimeMs = QDateTime::currentMSecsSinceEpoch();
+            if (_wsLastPong && (curTimeMs - _wsLastPong > 12*1000) ) { // todo const. 12s for now.
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "no pong from ws since " << (curTimeMs - _wsLastPong) << "ms";
+                // disconnect ws:
+                _ws.close(QWebSocketProtocol::CloseCodeGoingAway);
+                _isConnected = false;
+            }
+            // we trigger a new ping anyhow
+            _ws.ping();
+
             if (_ws2LastPong && (curTimeMs - _ws2LastPong > 12*1000) ) { // todo const. 12s for now.
                 qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "no pong from ws2 since " << (curTimeMs - _ws2LastPong) << "ms";
                 // disconnect ws2:
@@ -625,6 +637,14 @@ void ExchangeBinance::checkConnectWS()
         }
         QString url = QString("wss://stream.binance.com:9443/stream?streams=%1").arg(streams);
         _ws.open(QUrl(url));
+    }
+
+    // connection change?
+    bool curOnline = _isConnected && _isConnectedWs2 && _isAuth;
+    if (curOnline != _lastOnline) {
+        emit exchangeStatus(name(), !curOnline, !curOnline);
+        _lastOnline = curOnline;
+        qCDebug(CeBinance) << "exchangeStatus changed to" << _lastOnline;
     }
 }
 
@@ -686,12 +706,25 @@ void ExchangeBinance::onWs2Disconnected()
     }
 }
 
+void ExchangeBinance::onWsPong(quint64 elapsedTime, const QByteArray &payload)
+{
+//    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << elapsedTime << payload;
+    (void) elapsedTime;
+    (void) payload;
+    _wsLastPong = QDateTime::currentMSecsSinceEpoch();
+}
+
 void ExchangeBinance::onWs2Pong(quint64 elapsedTime, const QByteArray &payload)
 {
 //    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << elapsedTime << payload;
     (void) elapsedTime;
     (void) payload;
     _ws2LastPong = QDateTime::currentMSecsSinceEpoch();
+}
+
+void ExchangeBinance::onWsError(QAbstractSocket::SocketError err)
+{
+    qCDebug(CeBinance) << __PRETTY_FUNCTION__ << err;
 }
 
 void ExchangeBinance::onWs2Error(QAbstractSocket::SocketError err)
@@ -934,7 +967,7 @@ bool ExchangeBinance::getAvailable(const QString &cur, double &available) const
             bool shortFormat = b.contains("a");
             if (cur == b[shortFormat ? "a" : "asset"].toString()) {
                 available = b[shortFormat ? "f" : "free"].toString().toDouble();
-                qCDebug(CeBinance) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
+                // qCDebug(CeBinance) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
                 return true;
             }
         }
