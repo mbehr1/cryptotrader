@@ -317,7 +317,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         } else
                             sumFeeFactor += 0.002; // default to 0.2%
                         sumFeeFactor *= 100.0; // 0.002 -> into 0.2%
-                        qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor << "%";
+                        //qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor << "%";
 
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
                         appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );

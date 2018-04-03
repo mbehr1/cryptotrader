@@ -830,7 +830,7 @@ bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, dou
    // feeCur2 = 0.001;
    feeCur2 = 0.0;
 
-   qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "returning wrong fees. todo!" << feeCur1 << feeCur2;
+   //qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "returning wrong fees. todo!" << feeCur1 << feeCur2;
 
     return true;
 }

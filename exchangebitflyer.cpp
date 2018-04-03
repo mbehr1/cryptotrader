@@ -165,7 +165,7 @@ bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, do
             feeCur1 = (*it).second;
             feeCur2 = 0.0;
         }
-        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning true";
+        //qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning true";
         return true;
     }
     qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << buy << pair << feeCur1 << feeCur2 << amount << makerFee << "returning false!";

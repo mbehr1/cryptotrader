@@ -435,7 +435,7 @@ bool ExchangeHitbtc::getFee(bool buy, const QString &pair, double &feeCur1, doub
             feeCur2 = 0.0;
         }
     }
-    qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << pair << makerFee << feeCur1 << feeCur2;
+    //qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << pair << makerFee << feeCur1 << feeCur2;
     return true;
 }
 
