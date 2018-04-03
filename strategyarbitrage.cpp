@@ -316,7 +316,8 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             sumFeeFactor += feeCur2;
                         } else
                             sumFeeFactor += 0.002; // default to 0.2%
-                        qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor;
+                        sumFeeFactor *= 100.0; // 0.002 -> into 0.2%
+                        qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor << "%";
 
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
                         appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );
@@ -324,7 +325,6 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         //_lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
                         //                   .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
                         //                   .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
-
                         if (deltaPerc >= (_MinDeltaPerc+sumFeeFactor)) {
                             // do we have cur2 at eBuy
                             // do we have cur1 at eSell
