@@ -1,6 +1,7 @@
 /* (c) Matthias Behr, 2017, 2018
  *
  * todo list:
+ * - "bid > ask" problem on bitfinex. analyse and add sanity checks
  * - handling of heartbeat timeouts
  * - handling of maintenance periods
  * - add version info based on git tag/commit

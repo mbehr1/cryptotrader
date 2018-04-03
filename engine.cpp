@@ -255,7 +255,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
             _strategies.push_front(strategy5);
         }
 
-        if(1){
+        if(0){ // we use StrategyArb...
             std::shared_ptr<StrategyExchgDelta> strategy = std::make_shared<StrategyExchgDelta>(QString("#d2"), "ETHBTC",
                                                                                               bitfinexName, bitFlyerName, this);
             connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
@@ -267,7 +267,7 @@ Engine::Engine(QObject *parent) : QObject(parent)
             _strategies.push_front(strategy);
         }
 
-        if(1){
+        if(0){ // we use StrategyArb...
             std::shared_ptr<StrategyExchgDelta> strategy = std::make_shared<StrategyExchgDelta>(QString("#d1"), "BCHBTC",
                                                                                               bitfinexName, bitFlyerName, this);
             connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool))); // todo connect for other strats as well
@@ -362,6 +362,32 @@ Engine::Engine(QObject *parent) : QObject(parent)
         _strategies.push_front(strategy);
     }
 
+    if (1) {
+        QString cur1=QStringLiteral("ETH");
+        QString cur2=QStringLiteral("BTC");
+        std::shared_ptr<StrategyArbitrage> strategy = std::make_shared<StrategyArbitrage>(QString("#a3"), this);
+        connect(&(*(strategy.get())), SIGNAL(subscriberMsg(QString, bool)), this, SLOT(onSubscriberMsg(QString, bool)));
+        connect(&(*strategy), SIGNAL(tradeAdvice(QString, QString, QString, bool, double, double)), this, SLOT(onTradeAdvice(QString, QString, QString, bool,double,double)));
+
+        // configure it:
+        auto eBinance = std::dynamic_pointer_cast<ExchangeBinance>( _exchanges[binanceName]);
+        assert(eBinance->addPair("ETHBTC"));
+        auto eBitflyer = std::dynamic_pointer_cast<ExchangeBitFlyer>( _exchanges[bitFlyerName]);
+        auto eHitbtc = std::dynamic_pointer_cast<ExchangeHitbtc>( _exchanges[hitbtcName]);
+        assert(eHitbtc->addPair("ETHBTC"));
+
+        strategy->addExchangePair(_exchanges[bitfinexName], "tETHBTC", cur1, cur2);
+        strategy->addExchangePair(_exchanges[bitFlyerName], "ETH_BTC", cur1, cur2);
+        strategy->addExchangePair(_exchanges[binanceName], "ETHBTC", cur1, cur2);
+        strategy->addExchangePair(_exchanges[hitbtcName], "ETHBTC", cur1, cur2);
+
+        // now add available channels: (put this inside addExchangePair!
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBitflyer->getChannel("ETH_BTC", ExchangeBitFlyer::Book)));
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eBinance->getChannel("ETHBTC", ExchangeBinance::Book)));
+        strategy->announceChannelBook(std::dynamic_pointer_cast<ChannelBooks>(eHitbtc->getChannel("ETHBTC", ExchangeHitbtc::Book)));
+
+        _strategies.push_front(strategy);
+    }
 
 
     connect(&_slowMsgTimer, &QTimer::timeout, this, &Engine::onSlowMsgTimer);

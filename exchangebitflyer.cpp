@@ -185,6 +185,10 @@ bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount) const
         oAmount = 0.01;
         return true;
     }
+    if (pair.startsWith("ETH")) {
+        oAmount = 0.01;
+        return true;
+    }
     return false; // currently we don't know
 }
 
