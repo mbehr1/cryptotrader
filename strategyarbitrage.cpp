@@ -237,6 +237,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                     if (msecsDiff > _MaxTimeDiffMs) {
                         qCDebug(CsArb) << __PRETTY_FUNCTION__ << _id << "book times differences too big!" << e1._name << e2._name << msecsDiff;
                     } else {
+
                         // check prices:
                         double price1Buy=0.0, price1Sell=0.0, price2Buy=0.0, price2Sell=0.0, avg;
                         double amount = e2._availCur1 * 1.0042; // how much we buy depends on how much we have on the other todo factor see below
@@ -299,6 +300,24 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         }
                         ExchgData &eBuy = iBuy == 0 ? e1 : e2;
                         ExchgData &eSell = iBuy == 0 ? e2 : e1;
+
+                        // get expected fee factors:
+                        double sumFeeFactor = 0.0;
+                        double feeCur1= 0.0;
+                        double feeCur2 = feeCur1;
+                        if (eBuy._e->getFee(true, eBuy._pair, feeCur1, feeCur2, maxAmountBuy, false)){
+                            sumFeeFactor += feeCur1;
+                            sumFeeFactor += feeCur2;
+                        } else
+                            sumFeeFactor += 0.002; // default to 0.2%
+                        feeCur1 = 0.0; feeCur2 = 0.0;
+                        if (eSell._e->getFee(false, eSell._pair, feeCur1, feeCur2, maxAmountSell, false)){
+                            sumFeeFactor += feeCur1;
+                            sumFeeFactor += feeCur2;
+                        } else
+                            sumFeeFactor += 0.002; // default to 0.2%
+                        qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor;
+
                         double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
                         appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );
                         // iBuy == 0 -> eBuy = e1, price e1 < price e2 -> -deltaPerc
@@ -306,7 +325,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         //                   .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
                         //                   .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
 
-                        if (deltaPerc >= _MinDeltaPerc) {
+                        if (deltaPerc >= (_MinDeltaPerc+sumFeeFactor)) {
                             // do we have cur2 at eBuy
                             // do we have cur1 at eSell
                             double moneyToBuyCur2 = eBuy._availCur2;
