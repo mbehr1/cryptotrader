@@ -678,6 +678,7 @@ void ExchangeBinance::onWsConnected()
     qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) return;
     _isConnected = true;
+    _wsLastPong = 0;
 }
 
 void ExchangeBinance::onWs2Connected()

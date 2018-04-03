@@ -745,7 +745,7 @@ bool ExchangeBitFlyer::getAvailable(const QString &cur, double &available) const
                     bool hasAvailable = b.contains("available");
                     double bAmount = hasAvailable ? b["available"].toDouble() : b["amount"].toDouble();
                     available = bAmount; // todo what's difference between amount and avail? only one should be used on exchange
-                    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
+                    //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
                     return true;
                 }
             }
