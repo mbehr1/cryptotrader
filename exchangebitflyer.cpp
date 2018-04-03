@@ -373,15 +373,19 @@ void ExchangeBitFlyer::triggerCheckCommissions(const QString &pair)
                                    QByteArray arr = reply->readAll();
                                    QJsonDocument d = QJsonDocument::fromJson(arr);
                                    if (d.isObject()) {
-                                       qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "result from gettradingcommission" << d;
+                                       // qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "result from gettradingcommission" << d;
                                        // check whether is for free
                                        if (d.object().contains("commission_rate")) {
                                             double rate = d.object()["commission_rate"].toDouble();
                                             _commission_rates[pair] = rate;
-                                            if (rate != 0.0) {
+                                            if (pair == QStringLiteral("FX_BTC_JPY") && rate != 0.0) {
                                                 emit subscriberMsg(QString("commission rate %2=%1. Expected 0!").arg(rate).arg(pair));
                                             }
-
+                                            { // test
+                                            double feeCur1 = -1.0, feeCur2 = feeCur1;
+                                            (void)getFee(true, pair, feeCur1, feeCur2, 1.0);
+                                            qCDebug(CbitFlyer) << "buy fee for" << pair << feeCur1 << feeCur2;
+                                            }
                                        } else {
                                             qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "wrong result from gettradingcommission" << d;
                                             emit subscriberMsg(QString("couldn't get commission! (%1)").arg(QString(d.toJson())));
