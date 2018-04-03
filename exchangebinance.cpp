@@ -24,9 +24,6 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
     addPair("BCCBTC");
 
     setAuthData(api, skey);
-    triggerExchangeInfo();
-    triggerAccountInfo();
-    triggerCreateListenKey();
 
     assert(connect(&_ws, &QWebSocket::connected, this, &ExchangeBinance::onWsConnected));
     assert(connect(&_ws, &QWebSocket::disconnected, this, &ExchangeBinance::onWsDisconnected));
@@ -36,13 +33,16 @@ ExchangeBinance::ExchangeBinance(const QString &api, const QString &skey, QObjec
     assert(connect(&_ws, SIGNAL(pong(quint64,QByteArray)), this, SLOT(onWsPong(quint64, QByteArray))));
     assert(connect(&_ws, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWsError(QAbstractSocket::SocketError))));
 
-
     assert(connect(&_ws2, &QWebSocket::connected, this, &ExchangeBinance::onWs2Connected));
     assert(connect(&_ws2, &QWebSocket::disconnected, this, &ExchangeBinance::onWs2Disconnected));
     assert(connect(&_ws2, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBinance::onWs2SslErrors));
     assert(connect(&_ws2, SIGNAL(textMessageReceived(QString)), this, SLOT(onWs2TextMessageReceived(QString))));
     assert(connect(&_ws2, SIGNAL(pong(quint64,QByteArray)), this, SLOT(onWs2Pong(quint64, QByteArray))));
     assert(connect(&_ws2, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWs2Error(QAbstractSocket::SocketError))));
+
+    triggerExchangeInfo();
+    triggerAccountInfo();
+    triggerCreateListenKey();
 
     assert(connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer())));
     _queryTimer.setSingleShot(false);
