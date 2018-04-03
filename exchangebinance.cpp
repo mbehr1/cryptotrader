@@ -229,7 +229,15 @@ void ExchangeBinance::triggerAccountInfo()
             if (_accountInfo["makerCommission"].toInt()!=10 || _accountInfo["takerCommission"].toInt() != 10) {
                 qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "expect different commissions!" << _accountInfo;
             }
-
+            if (_accountInfo["buyerCommission"].toInt()!=0 || _accountInfo["sellerCommission"].toInt() != 0) {
+                qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "expect different commissions!" << _accountInfo;
+            }
+            {
+               double feeCur1 = -1.0;
+               double feeCur2 = feeCur1;
+               getFee(true, "BTCBNB", feeCur1, feeCur2, 1.0);
+               qCDebug(CeBinance) << "fee for BTCBNB pair=" << feeCur1 << feeCur2;
+            }
             if (_accountInfo.contains("balances"))
               updateBalances(_accountInfo["balances"].toArray());
             if (!_accountInfo["canTrade"].toBool()) // "canDeposit":true,"canTrade":true,"canWithdraw":true,
@@ -814,14 +822,15 @@ bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, dou
     (void)buy;
     (void)pair,
     (void)amount;
-    (void)makerFee;
 
     // currently always 0,1% is used. but on which currency?
-    // lets be conservative and put it on both
-   feeCur1 = 0.001;
-   feeCur2 = 0.001;
+    // we currently use BNB so it's none of them. let's fake cur1. once we disable BNB as fee we need to recheck.
 
-   qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "returning wrong fees. todo!";
+   feeCur1 = (double)(_accountInfo[makerFee ? "makerCommission" : "takerCommission"].toInt())/10000; // !=10 0.001;
+   // feeCur2 = 0.001;
+   feeCur2 = 0.0;
+
+   qCWarning(CeBinance) << __PRETTY_FUNCTION__ << "returning wrong fees. todo!" << feeCur1 << feeCur2;
 
     return true;
 }
