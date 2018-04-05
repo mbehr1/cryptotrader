@@ -370,14 +370,14 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
                             // check if really enough cur2 to buy is available on eBuy:
                             if (eBuy._book->exchange()->getAvailable(eBuy._cur2, minTemp)) {
-                                if ((amountBuyCur1*priceBuy * 1.001) >= minTemp) {
+                                if ((amountBuyCur1*priceBuy ) >= minTemp) {
                                     if (priceBuy!= 0.0)
-                                        amountBuyCur1 = minTemp / (priceBuy * 1.001);
+                                        amountBuyCur1 = minTemp / (priceBuy );
                                     else amountBuyCur1 = 0.0;
                                     amountSellCur1 = amountBuyCur1 / 1.0042;
                                     amountBuyCur1 = amountSellCur1 * 1.0042;
                                     qCDebug(CsArb) << "reduced amount to buy due to not enough available to" << amountBuyCur1 << eBuy._name;
-                                    if ((amountBuyCur1*priceBuy * 1.001) > minTemp) {
+                                    if ((amountBuyCur1*priceBuy ) > minTemp) {
                                         qCWarning(CsArb) << "calc error! Reduced to 0" << amountBuyCur1 << priceBuy << minTemp << eBuy._name << eBuy._cur2;
                                         amountSellCur1 = 0.0;
                                     }
@@ -389,15 +389,15 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                                 bool tooLowOrderValue = false;
                                 double minOrderValue;
                                 if (eSell._book->exchange()->getMinOrderValue(eSell._pair, minOrderValue)) {
-                                    if ((amountSellCur1 * priceSell * 0.999)< minOrderValue) {
+                                    if ((amountSellCur1 * priceSell )< minOrderValue) {
                                         tooLowOrderValue = true;
-                                        qCDebug(CsArb) << "too low order value for" << eSell._name << eSell._pair << amountSellCur1 << priceSell*0.999 << minOrderValue;
+                                        qCDebug(CsArb) << "too low order value for" << eSell._name << eSell._pair << amountSellCur1 << priceSell << minOrderValue;
                                     }
                                 }
                                 if (eBuy._book->exchange()->getMinOrderValue(eBuy._pair, minOrderValue)) {
-                                    if ((amountBuyCur1 * priceBuy * 1.001) < minOrderValue) {
+                                    if ((amountBuyCur1 * priceBuy) < minOrderValue) {
                                         tooLowOrderValue = true;
-                                        qCDebug(CsArb) << "too low order value for" << eBuy._name << eBuy._pair << amountBuyCur1 << priceBuy*1.001 << minOrderValue;
+                                        qCDebug(CsArb) << "too low order value for" << eBuy._name << eBuy._pair << amountBuyCur1 << priceBuy << minOrderValue;
                                     }
                                 }
                                 if (!tooLowOrderValue) {
@@ -414,10 +414,10 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
                                     // buy:
                                     eBuy._waitForOrder = true;
-                                    emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, amountBuyCur1, priceBuy * 1.001); // slightly higher price for higher rel.
+                                    emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, amountBuyCur1, priceBuy);
                                     // sell:
                                     eSell._waitForOrder = true;
-                                    emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, amountSellCur1, priceSell * 0.999); // slightly lower price for higher rel.
+                                    emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, amountSellCur1, priceSell);
                                 } else {
                                     _lastStatus.append("wanted to buy but too low order value!");
                                 }

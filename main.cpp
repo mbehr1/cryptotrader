@@ -1,6 +1,7 @@
 /* (c) Matthias Behr, 2017, 2018
  *
  * todo list:
+ * - take rounding of prices/volumes for newOrder into account for s.arb.
  * - "bid > ask" problem on bitfinex. analyse and add sanity checks
  * - handling of heartbeat timeouts
  * - handling of maintenance periods
