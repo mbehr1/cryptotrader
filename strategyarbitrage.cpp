@@ -331,7 +331,6 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         //qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor << "%";
 
                         double deltaPerc = 100.0*((rPriceSell/rPriceBuy)-1.0);
-                        qCDebug(CsArb) << deltaPerc;
                         appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );
                         // iBuy == 0 -> eBuy = e1, price e1 < price e2 -> -deltaPerc
                         //_lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
@@ -358,7 +357,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
                             double tamountBuy = rAmountSellCur1 * (1.0 + sumFeeFactor); // we buy as much as the fees are
                             if (tamountBuy < rAmountBuyCur1) {
-                                qCDebug(CsArb) << _id << "amount to buy < minAmount allowed" << tamountBuy << (QString)rAmountBuyCur1;
+                                //qCDebug(CsArb) << _id << "amount to buy < minAmount allowed" << tamountBuy << (QString)rAmountBuyCur1;
                                 continue;
                             }
                             rAmountBuyCur1 = tamountBuy;

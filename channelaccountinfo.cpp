@@ -89,7 +89,7 @@ bool ChannelAccountInfo::walletGetAvailable(const QString &cur, double &amount) 
             for (const auto &cur2 : wt.second) {
                 if (cur2.first == cur) {
                     amount = cur2.second;
-                    qDebug() << __PRETTY_FUNCTION__ << cur << "returning true with" << amount;
+                    //qDebug() << __PRETTY_FUNCTION__ << cur << "returning true with" << amount;
                     return true;
                 }
             }
