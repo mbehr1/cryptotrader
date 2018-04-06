@@ -89,6 +89,34 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
     return true;
 }
 
+RoundingDouble ExchangeBitfinex::getRounding(const QString &pair, bool price) const
+{
+    double amount=0.0;
+    QString strMinNum=QStringLiteral("0.00000001");
+
+    // for amount we can check whether it exists in _symbolDetails
+    const QString lowerPair = pair.toLower();
+    for (const auto &symb : _symbolDetails)
+    {
+        if (symb.isObject()) {
+            const QJsonObject &sym = symb.toObject();
+            if (sym["pair"].toString().toLower() == lowerPair) {
+                if (price) {
+                    int prec = sym["price_precision"].toInt();
+                    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << pair << "using price prec=" << prec;
+                    return RoundingDouble(amount, prec);
+                } else {
+                    // we keep the default! strMinNum
+                    amount = sym["minimum_order_size"].toString().toDouble();
+                }
+                break;
+            }
+        }
+    }
+
+    return RoundingDouble(amount, strMinNum);
+}
+
 bool ExchangeBitfinex::getMinOrderValue(const QString &pair, double &minValue) const
 {
     (void)pair;
@@ -342,7 +370,9 @@ bool ExchangeBitfinex::getSymbolDetails()
                            // test it:
                             double minAmount = -1.0;
                            (void)getMinAmount("XMRBTC", minAmount);
-                            qCDebug(CeBitfinex) << "min amount for XMRBTC=" << minAmount;
+                            qCDebug(CeBitfinex) << "min amount for XMRBTC=" << minAmount << d;
+                            qCDebug(CeBitfinex) << "getRounding(XMRBTC, price)" << getRounding("XMRBTC", true);
+                            qCDebug(CeBitfinex) << "getRounding(XMRBTC, amount)" << getRounding("XMRBTC", false);
                             })) {
         qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
         return false;

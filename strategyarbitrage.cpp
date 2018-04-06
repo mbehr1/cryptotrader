@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QDir>
 #include "strategyarbitrage.h"
+#include "roundingdouble.h"
 
 Q_LOGGING_CATEGORY(CsArb, "s.arb")
 
@@ -277,19 +278,19 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
                         // which price is lower?
                         int iBuy;
-                        double priceSell, priceBuy;
+                        double oPriceSell, oPriceBuy;
                         double maxAmountSell, maxAmountBuy;
                         if (gotPrice1Buy && gotPrice2Sell && (price1Buy < price2Sell)) {
                             iBuy = 0;
-                            priceBuy = price1Buy;
-                            priceSell = price2Sell;
+                            oPriceBuy = price1Buy;
+                            oPriceSell = price2Sell;
                             maxAmountBuy = maxAmountE1Buy;
                             maxAmountSell = maxAmountE2Sell;
                         } else {
                             if (gotPrice2Buy && gotPrice1Sell && (price2Buy < price1Sell)) {
                                 iBuy = 1;
-                                priceBuy = price2Buy;
-                                priceSell = price1Sell;
+                                oPriceBuy = price2Buy;
+                                oPriceSell = price1Sell;
                                 maxAmountBuy = maxAmountE2Buy;
                                 maxAmountSell = maxAmountE1Sell;
                             } else {
@@ -300,6 +301,12 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         }
                         ExchgData &eBuy = iBuy == 0 ? e1 : e2;
                         ExchgData &eSell = iBuy == 0 ? e2 : e1;
+
+                        // from now on we need to use rounded prices and amounts
+                        RoundingDouble rPriceSell = eSell._e->getRounding(eSell._pair, true);
+                        rPriceSell = oPriceSell; // we can ignore whether priceSell is lower than min price?
+                        RoundingDouble rPriceBuy = eBuy._e->getRounding(eBuy._pair, true);
+                        rPriceBuy = oPriceBuy;
 
                         // get expected fee factors:
                         double sumFeeFactor = 0.0;
@@ -314,38 +321,59 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         if (eSell._e->getFee(false, eSell._pair, feeCur1, feeCur2, maxAmountSell, false)){
                             sumFeeFactor += feeCur1;
                             sumFeeFactor += feeCur2;
-                        } else
+                            if (feeCur1 > 0.0)
+                                maxAmountSell /= (1.0+feeCur1); // we can't sell all as some part will be needed as fee
+                        } else {
                             sumFeeFactor += 0.002; // default to 0.2%
-                        sumFeeFactor *= 100.0; // 0.002 -> into 0.2%
+                            maxAmountSell /= 1.002; // was 1.0021 in earlier versions
+                        }
+                        double sumFeePerc = sumFeeFactor * 100.0; // 0.002 -> into 0.2%
                         //qCDebug(CsArb) << "using sumFeeFactor=" << sumFeeFactor << "%";
 
-                        double deltaPerc = 100.0*((priceSell/priceBuy)-1.0);
+                        double deltaPerc = 100.0*((rPriceSell/rPriceBuy)-1.0);
+                        qCDebug(CsArb) << deltaPerc;
                         appendLastStatus(_lastStatus, e1, e2, iBuy == 0 ? -deltaPerc : deltaPerc );
                         // iBuy == 0 -> eBuy = e1, price e1 < price e2 -> -deltaPerc
                         //_lastStatus.append(QString("\nbuy %1 %8 at %2%6, sell %3 at %4%7, delta %5%")
                         //                   .arg(eBuy._name).arg(priceBuy).arg(eSell._name).arg(priceSell).arg(deltaPerc)
                         //                   .arg(eBuy._cur2).arg(eSell._cur2).arg(eBuy._cur1));
-                        if (deltaPerc >= (_MinDeltaPerc+sumFeeFactor)) {
+                        if (deltaPerc >= (_MinDeltaPerc+sumFeePerc)) {
+
+                            RoundingDouble rAmountSellCur1 = eSell._e->getRounding(eSell._pair, false); // initialized with minAmount allowed
+                            if (maxAmountSell < rAmountSellCur1) {
+                                qCDebug(CsArb) << _id << "amount to sell < minAmount allowed" << maxAmountSell << (QString)rAmountSellCur1;
+                                continue;
+                            }
+                            rAmountSellCur1 = maxAmountSell;
+
+                            RoundingDouble rAmountBuyCur1 = eBuy._e->getRounding(eBuy._pair, false); // initialized with minAmount allowed
+
+
                             // do we have cur2 at eBuy
                             // do we have cur1 at eSell
-                            double moneyToBuyCur2 = eBuy._availCur2;
-                            double amountSellCur1 = std::min(maxAmountSell, (eSell._availCur1/1.0021)); // at sell some exchanges take the fee from the cur to sell! todo assume 0.2% here
+                            // double amountSellCur1 = std::min(maxAmountSell, (eSell._availCur1/1.0021)); // at sell some exchanges take the fee from the cur to sell! todo assume 0.2% here
 
                             // do we have to take fees into consideration? the 1% (todo const) needs to be high enough to compensate for both fees!
                             // yes, we do. See below (we need to buy more than we sell from cur1 otherwise the fees make it disappear)
 
-                            // reduce amountSellCur1 if we don't have enough money to buy
-                            double amountBuyCur1 = amountSellCur1 * 1.0042; // todo const. use 2xfee
-
-                            if (amountSellCur1*priceBuy >= moneyToBuyCur2) {
-                                amountSellCur1 = moneyToBuyCur2 / priceBuy;
-                                amountBuyCur1 = amountSellCur1 * 1.0042;
+                            double tamountBuy = rAmountSellCur1 * (1.0 + sumFeeFactor); // we buy as much as the fees are
+                            if (tamountBuy < rAmountBuyCur1) {
+                                qCDebug(CsArb) << _id << "amount to buy < minAmount allowed" << tamountBuy << (QString)rAmountBuyCur1;
+                                continue;
                             }
-                            // is amountBuy too high?
-                            if (amountBuyCur1 > maxAmountBuy) {
+                            rAmountBuyCur1 = tamountBuy;
+
+                            // reduce amountSellCur1 if we don't have enough money to buy
+                            double moneyToBuyCur2 = eBuy._availCur2;
+                            if (rAmountSellCur1*rPriceBuy >= moneyToBuyCur2) {
+                                rAmountSellCur1 = moneyToBuyCur2 / rPriceBuy; // todo should we sell less here? always round down?
+                                rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor); // was 1.0042;
+                            }
+                            // is amountBuy too high? todo rethink this
+                            if (rAmountBuyCur1 > maxAmountBuy) {
                                 // correct amountSellCur1
-                                amountSellCur1 = maxAmountBuy / 1.0042;
-                                amountBuyCur1 = amountSellCur1 * 1.0042; // there might be small rounding errors here but it should be neglectable
+                                rAmountSellCur1 = maxAmountBuy / (1.0 + sumFeeFactor);
+                                rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor); // there might be small rounding errors here but it should be neglectable
                             }
 
                             // determine min amounts to buy/sell:
@@ -357,10 +385,10 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             }
                             // check if really enough cur1 is available on eSell:
                             if (eSell._book->exchange()->getAvailable(eSell._cur1, minTemp)) {
-                                if (amountSellCur1 >= minTemp) {
-                                    qCDebug(CsArb) << "reduced amount to sell due to not enough available from" << amountSellCur1 << "to" << minTemp << eSell._name;
-                                    amountSellCur1 = minTemp;
-                                    amountBuyCur1 = amountSellCur1 * 1.0042;
+                                if (rAmountSellCur1 >= minTemp) {
+                                    qCDebug(CsArb) << "reduced amount to sell due to not enough available from" << (QString)rAmountSellCur1 << "to" << minTemp << eSell._name;
+                                    rAmountSellCur1 = minTemp;
+                                    rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor);
                                 }
                             }
 
@@ -370,54 +398,61 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
 
                             // check if really enough cur2 to buy is available on eBuy:
                             if (eBuy._book->exchange()->getAvailable(eBuy._cur2, minTemp)) {
-                                if ((amountBuyCur1*priceBuy ) >= minTemp) {
-                                    if (priceBuy!= 0.0)
-                                        amountBuyCur1 = minTemp / (priceBuy );
-                                    else amountBuyCur1 = 0.0;
-                                    amountSellCur1 = amountBuyCur1 / 1.0042;
-                                    amountBuyCur1 = amountSellCur1 * 1.0042;
-                                    qCDebug(CsArb) << "reduced amount to buy due to not enough available to" << amountBuyCur1 << eBuy._name;
-                                    if ((amountBuyCur1*priceBuy ) > minTemp) {
-                                        qCWarning(CsArb) << "calc error! Reduced to 0" << amountBuyCur1 << priceBuy << minTemp << eBuy._name << eBuy._cur2;
-                                        amountSellCur1 = 0.0;
+                                if ((rAmountBuyCur1*rPriceBuy ) >= minTemp) {
+                                    if (rPriceBuy!= 0.0)
+                                        rAmountBuyCur1 = minTemp / (rPriceBuy );
+                                    else rAmountBuyCur1 = 0.0;
+                                    rAmountSellCur1 = rAmountBuyCur1 / (1.0 + sumFeeFactor);
+                                    rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor);
+                                    qCDebug(CsArb) << "reduced amount to buy due to not enough available to" << (QString)rAmountBuyCur1 << eBuy._name;
+                                    if ((rAmountBuyCur1*rPriceBuy ) > minTemp) {
+                                        qCWarning(CsArb) << "calc error! Reduced to 0" << rAmountBuyCur1 << rPriceBuy << minTemp << eBuy._name << eBuy._cur2;
+                                        rAmountSellCur1 = 0.0;
                                     }
                                 }
                             }
 
-                            if (amountSellCur1>= minAmount) {
+                            /*
+                             * below here we don't adjust amountSellCur1, priceSell, amountBuyCur1, priceBuy
+                             * and more but fail if some checks don't pass
+                             *
+                             */
+
+
+                            if (rAmountSellCur1>= minAmount) {
                                 // check minValues (amount*price) as well
                                 bool tooLowOrderValue = false;
                                 double minOrderValue;
                                 if (eSell._book->exchange()->getMinOrderValue(eSell._pair, minOrderValue)) {
-                                    if ((amountSellCur1 * priceSell )< minOrderValue) {
+                                    if ((rAmountSellCur1 * rPriceSell )< minOrderValue) {
                                         tooLowOrderValue = true;
-                                        qCDebug(CsArb) << "too low order value for" << eSell._name << eSell._pair << amountSellCur1 << priceSell << minOrderValue;
+                                        qCDebug(CsArb) << "too low order value for" << eSell._name << eSell._pair << rAmountSellCur1 << rPriceSell << minOrderValue;
                                     }
                                 }
                                 if (eBuy._book->exchange()->getMinOrderValue(eBuy._pair, minOrderValue)) {
-                                    if ((amountBuyCur1 * priceBuy) < minOrderValue) {
+                                    if ((rAmountBuyCur1 * rPriceBuy) < minOrderValue) {
                                         tooLowOrderValue = true;
-                                        qCDebug(CsArb) << "too low order value for" << eBuy._name << eBuy._pair << amountBuyCur1 << priceBuy << minOrderValue;
+                                        qCDebug(CsArb) << "too low order value for" << eBuy._name << eBuy._pair << rAmountBuyCur1 << rPriceBuy << minOrderValue;
                                     }
                                 }
                                 if (!tooLowOrderValue) {
                                     QString str;
 
-                                    str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg(amountSellCur1).arg(eSell._cur1).arg(priceSell).arg((amountSellCur1*priceSell)).arg(eSell._cur2).arg(eSell._name);
+                                    str = QString("sell %1 %2 at price %3 for %4 %5 at %6").arg((QString)rAmountSellCur1).arg(eSell._cur1).arg((QString)rPriceSell).arg((rAmountSellCur1*rPriceSell)).arg(eSell._cur2).arg(eSell._name);
                                     _lastStatus.append(str);
                                     qCWarning(CsArb) << str << eSell._book->symbol();
                                     emit subscriberMsg(str);
-                                    str = QString("buy %1 %2 for %3 %4 at %5").arg(amountBuyCur1).arg(eBuy._cur1).arg(amountBuyCur1*priceBuy).arg(eBuy._cur2).arg(eBuy._name);
+                                    str = QString("buy %1 %2 for %3 %4 at %5").arg((QString)rAmountBuyCur1).arg(eBuy._cur1).arg(rAmountBuyCur1*rPriceBuy).arg(eBuy._cur2).arg(eBuy._name);
                                     _lastStatus.append(str);
                                     qCWarning(CsArb) << str << eBuy._book->symbol();
                                     emit subscriberMsg(str);
 
                                     // buy:
                                     eBuy._waitForOrder = true;
-                                    emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, amountBuyCur1, priceBuy);
+                                    emit tradeAdvice(eBuy._name, _id, eBuy._book->symbol(), false, rAmountBuyCur1, rPriceBuy);
                                     // sell:
                                     eSell._waitForOrder = true;
-                                    emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, amountSellCur1, priceSell);
+                                    emit tradeAdvice(eSell._name, _id, eSell._book->symbol(), true, rAmountSellCur1, rPriceSell);
                                 } else {
                                     _lastStatus.append("wanted to buy but too low order value!");
                                 }

@@ -835,6 +835,40 @@ bool ExchangeBinance::getFee(bool buy, const QString &pair, double &feeCur1, dou
     return true;
 }
 
+RoundingDouble ExchangeBinance::getRounding(const QString &pair, bool price) const
+{
+    double minAmount = 0.0;
+    QString strMinNum= QStringLiteral("1");
+    const auto &si = _symbolMap.find(pair);
+    if (si != _symbolMap.cend()) {
+        const auto &s = (*si).second;
+        if (s["filters"].isArray()) {
+            for (const auto &fi : s["filters"].toArray()) {
+                if (fi.isObject()) {
+                    const auto &f = fi.toObject();
+                    if (f["filterType"] == (price ? QStringLiteral("PRICE_FILTER") : QStringLiteral("LOT_SIZE"))) {
+                        if (price) {
+                            minAmount = f["minPrice"].toString().toDouble();
+                            strMinNum = f["tickSize"].toString();
+                        } else {
+                            minAmount = f["minQty"].toString().toDouble();
+                            strMinNum = f["stepSize"].toString();
+                        }
+                        return RoundingDouble(minAmount, strMinNum);
+                    }
+                }
+            }
+        }else{
+            qCCritical(CeBinance) << __PRETTY_FUNCTION__ << "filters not there or no array" << s;
+            assert(false);
+        }
+    } else {
+        qCCritical(CeBinance) << __PRETTY_FUNCTION__ << "can't find" << pair;
+        assert(false); // must not happen!
+    }
+    return RoundingDouble(minAmount, strMinNum);
+}
+
 bool ExchangeBinance::getMinOrderValue(const QString &pair, double &minValue) const
 {
     // search in symbols.

@@ -25,6 +25,7 @@ public:
                   ) override;
     virtual void reconnect() override;
     virtual bool getAvailable(const QString &cur, double &available) const override;
+    virtual RoundingDouble getRounding(const QString &pair, bool price) const override;
     virtual bool getMinAmount(const QString &pair, double &amount) const override;
     virtual bool getMinOrderValue(const QString &pair, double &minValue) const override;
     QString getFeeCur(const QString &symbol) const;

@@ -172,6 +172,15 @@ bool ExchangeBitFlyer::getFee(bool buy, const QString &pair, double &feeCur1, do
     return false;
 }
 
+RoundingDouble ExchangeBitFlyer::getRounding(const QString &pair, bool price) const
+{ // newOrder uses QString("%1").arg(price, 0, 'f', 5); for both price and amount
+    double amount = 0.00001;
+    if (!price) {
+        (void)getMinAmount(pair, amount);
+    }
+    return RoundingDouble(amount, QStringLiteral("0.00001"));
+}
+
 bool ExchangeBitFlyer::getMinOrderValue(const QString &pair, double &minAmount) const
 {
     (void)pair;

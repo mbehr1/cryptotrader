@@ -53,8 +53,10 @@ void ExchangeHitbtc::loadPendingOrders()
                     const QJsonObject &o = elem.toObject();
                     QString id = o["id"].toString();
                     int cid = o["cid"].toInt();
-                    if (cid && id.length())
+                    if (cid && id.length()) {
                         _pendingOrdersMap.insert(std::make_pair(cid, id));
+                        //qCDebug(CeHitbtc) << "pending order" << cid << id;
+                    }
                 }
             }
         }
@@ -439,6 +441,23 @@ bool ExchangeHitbtc::getFee(bool buy, const QString &pair, double &feeCur1, doub
     return true;
 }
 
+RoundingDouble ExchangeHitbtc::getRounding(const QString &symbol, bool price) const
+{
+    // get symbol:
+    const auto it = _symbolMap.find(symbol);
+    if (it == _symbolMap.cend()) {
+        qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "can't find symbol in map" << symbol;
+        assert(false); // must not happen!
+        return RoundingDouble(0.0, "0.00000001");
+    }
+    const QJsonObject &sym = (*it).second;
+    QString strMinNum = price ? sym["tickSize"].toString() : sym["quantityIncrement"].toString();
+    double amount = strMinNum.toDouble();
+
+    RoundingDouble toRet(amount, strMinNum);
+    return toRet;
+}
+
 bool ExchangeHitbtc::getMinAmount(const QString &pair, double &amount) const
 {
     const auto it = _symbolMap.find(pair);
@@ -451,7 +470,7 @@ bool ExchangeHitbtc::getMinAmount(const QString &pair, double &amount) const
 
     amount = sym["quantityIncrement"].toString().toDouble();
 
-    qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << pair << amount;
+    //qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << pair << amount;
     return true;
 }
 
@@ -692,8 +711,9 @@ void ExchangeHitbtc::handleReport(const QJsonObject &rep)
         int cid = rep["clientOrderId"].toString().toInt();
         auto it = _pendingOrdersMap.find(cid);
         if (it != _pendingOrdersMap.end()) {
-            if ((*it).second != QString("%1").arg((long long)rep["id"].toDouble()))
-                qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "id mismatch!" << (*it).second << rep["id"];
+            qlonglong repId = rep["id"].isString()? rep["id"].toString().toLongLong() : rep["id"].toDouble();
+            if ((*it).second != QString("%1").arg(repId))
+                qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "id mismatch!" << (*it).second << repId << rep["id"];
             QString status = rep["status"].toString();
             // check status: new, suspended, partiallyFilled, filled, canceled, expired
             if (status == QStringLiteral("new") || status == QStringLiteral("partiallyFilled")
@@ -798,7 +818,7 @@ bool ExchangeHitbtc::getAvailable(const QString &cur, double &available) const
             const auto &b = ba.toObject();
             if (b["currency"].toString() == cur) {
                 available = b["available"].toString().toDouble();
-                qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
+                //qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << cur << "returning true with" << available;
                 return true;
             }
         }
