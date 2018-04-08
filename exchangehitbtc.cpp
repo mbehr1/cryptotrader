@@ -712,7 +712,7 @@ void ExchangeHitbtc::handleReport(const QJsonObject &rep)
         auto it = _pendingOrdersMap.find(cid);
         if (it != _pendingOrdersMap.end()) {
             qlonglong repId = rep["id"].isString()? rep["id"].toString().toLongLong() : rep["id"].toDouble();
-            if ((*it).second != QString("%1").arg(repId))
+            if (((*it).second.length()) && ((*it).second != QString("%1").arg(repId))) // we need to ignore the pending ones (empty id) as sometimes the report comes faster than the order confirmation
                 qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "id mismatch!" << (*it).second << repId << rep["id"];
             QString status = rep["status"].toString();
             // check status: new, suspended, partiallyFilled, filled, canceled, expired
@@ -885,8 +885,12 @@ int ExchangeHitbtc::newOrder(const QString &symbol, const double &amount, const 
                           }
                           const QJsonObject &result = reply["result"].toObject();
                           // if ok add to _pendingOrdersMap
-                          _pendingOrdersMap[nextCid] = result["id"].toString();
-                          storePendingOrders();
+                          // the report might occur before the result. so it might be processed already.
+                          // thus check whether it still exists.
+                          if (_pendingOrdersMap.find(nextCid) != _pendingOrdersMap.cend()) {
+                            _pendingOrdersMap[nextCid] = result["id"].toString();
+                            storePendingOrders();
+                          }
 })){
         qCWarning(CeHitbtc) << __PRETTY_FUNCTION__ << "failed to trigger newOrder" << symbol;
         _pendingOrdersMap.erase(nextCid);
