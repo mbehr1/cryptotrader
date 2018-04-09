@@ -7,7 +7,7 @@ Exchange::Exchange(QObject *parent, const QString &exchange_name) : QObject(pare
   ,_settings("mcbehr.de", exchange_name)
 {
     _persLastCid = _settings.value("LastCid", 0).toInt();
-    qDebug() << __PRETTY_FUNCTION__ << "last cid=" << _persLastCid;
+    qDebug() << __PRETTY_FUNCTION__ << exchange_name << "last cid=" << _persLastCid;
 }
 
 Exchange::~Exchange()

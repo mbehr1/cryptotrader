@@ -870,7 +870,7 @@ int ExchangeHitbtc::newOrder(const QString &symbol, const double &amount, const 
     {"price", sPrice},
     {"strictValidate", true}
     };
-    qCInfo(CeHitbtc) << __PRETTY_FUNCTION__ << symbol << amount << price << type << hidden << obj;
+    qCInfo(CeHitbtc) << __PRETTY_FUNCTION__ << nextCid << symbol << amount << price << type << hidden << obj;
 
     _pendingOrdersMap[nextCid] = QString(); // mark as pending
 
