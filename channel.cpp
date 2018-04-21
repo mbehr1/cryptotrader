@@ -60,6 +60,9 @@ void Channel::unsubscribed()
 bool Channel::handleChannelData(const QJsonArray &data)
 {
     //qCDebug(Cchannel) << __FUNCTION__ << data;
+    if (!_isSubscribed) {
+        qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "data but not subscribed" << data;
+    }
     assert(_id == data.at(0).toInt());
     _lastMsg = QDateTime::currentDateTime(); // or UTC?
     if (_isTimeout) {
@@ -151,6 +154,7 @@ ChannelBooks::~ChannelBooks()
 
 bool ChannelBooks::handleChannelData(const QJsonArray &data)
 {
+    //qCDebug(Cchannel) << __PRETTY_FUNCTION__ << data;
     if (Channel::handleChannelData(data)) {
         const QJsonValue &actionValue = data.at(1);
         if (actionValue.isString()) {
@@ -164,6 +168,8 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
                 // array -> assume update messages
                 if (actionValue.toArray()[0].isArray()) {
                     qCDebug(Cchannel) << _id << "array of " << actionValue.toArray().count() << "arrays";
+                    if (actionValue.toArray().count()>=50) // we expect at least twice the "len" param. (todo use param)
+                        _bitFlyerGotSnapshot = true;
                     for (auto a : actionValue.toArray()) {
                         // qCDebug(Cchannel) << a;
                         if (a.isArray()) {
@@ -177,6 +183,11 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
                         } else qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "don't know how to handle" << a << data;
                     }
                 } else {
+                    if (!_bitFlyerGotSnapshot) {
+                        // we ignore it and wait for snapshot first
+                        qCWarning(Cchannel) << __PRETTY_FUNCTION__ << "still waiting for snapshot. ignored" << data;
+                        return true;
+                    }
                     // array of objects, so single update
                     // for books: price, count, amount
                     //

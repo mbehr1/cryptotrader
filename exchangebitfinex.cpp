@@ -14,6 +14,7 @@ Q_LOGGING_CATEGORY(CeBitfinex, "e.bitfinex")
 
 ExchangeBitfinex::ExchangeBitfinex(QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebitfinex")
+  , _seqLast(-1)
   , _checkConnectionTimer(this)
   , _accountInfoChannel(this)
 {
@@ -104,7 +105,7 @@ RoundingDouble ExchangeBitfinex::getRounding(const QString &pair, bool price) co
                 if (price) {
                     int prec = sym["price_precision"].toInt();
                     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << pair << "using price prec=" << prec;
-                    return RoundingDouble(amount, prec);
+                    return RoundingDouble(amount, prec); // todo Bitfinex seems to have another meaning of prec. I.e. 5 = 5 digits in total (e.g. 12345 not 12345.67890)
                 } else {
                     // we keep the default! strMinNum
                     amount = sym["minimum_order_size"].toString().toDouble();
@@ -175,6 +176,7 @@ void ExchangeBitfinex::onConnected()
     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << _isConnected;
     if (_isConnected) return;
     _isConnected = true;
+    _seqLast = -1;
     connect(&_ws, &QWebSocket::textMessageReceived,
                 this, &ExchangeBitfinex::onTextMessageReceived);
     _checkConnectionTimer.stop();
@@ -459,7 +461,7 @@ void ExchangeBitfinex::parseJson(const QString &msg)
                     handleSubscribedEvent(obj);
                 } else
                     if (evVString.compare("conf")==0) {
-                        qCDebug(CeBitfinex) << "TODO got conf!";
+                        handleConfEvent(obj);
                     } else
                     if (evVString.compare("pong")==0) {
                         qCDebug(CeBitfinex) << "TODO got pong!";
@@ -483,6 +485,20 @@ void ExchangeBitfinex::parseJson(const QString &msg)
             qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "json neither object nor array!" << json;
         }
 
+}
+
+void ExchangeBitfinex::handleConfEvent(const QJsonObject &obj)
+{
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
+    QString status = obj["status"].toString();
+    int flags = obj["flags"].toInt();
+    if (status.length() && status != QStringLiteral("OK")) {
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "bad status" << status << obj;
+    }
+    if ((flags & 65536) != 65536) {
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "flags error: SEQ_ALL not containted" << flags << obj;
+        assert(false);
+    }
 }
 
 void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
@@ -533,6 +549,11 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
         if (obj["version"].toInt() != 2) {
             qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "tested with version 2 only. got" << obj;
             subscriberMsg(QString("*unknown version!* (%1)").arg(QJsonDocument(obj).toJson().toStdString().c_str()));
+        }
+
+        { // set conf to enable SEQ_ALL:
+            QString confMsg(QString("{\"event\": \"conf\", \"flags\": %1}").arg(65536)); // SEQ_ALL = 65536
+            _ws.sendTextMessage(confMsg);
         }
 
         if (!sendAuth(_apiKey, _sKey))
@@ -657,11 +678,34 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
 
 void ExchangeBitfinex::handleChannelData(const QJsonArray &data)
 {
-//    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << data;
+    //qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << data;
     if (!data.isEmpty()) {
         // we expect at least the channel id and one action
         if (data.count() >= 2) {
             auto channelId = data.at(0).toInt();
+
+            // sequence is the last element in the array
+            int sequence = data.at(data.count()-1).toInt();
+            //qDebug(CeBitfinex) << "sequence=" << sequence << channelId;
+
+                if (_seqLast<0)
+                    _seqLast = sequence;
+                else {
+                    // compare, we expect sequence to be = _seqLast+1
+                    if (++_seqLast != sequence) {
+                        // sometimes there is some weird (unknown) other data:
+                        // sequence mismatch. got 653 expected 491283 QJsonArray([0,"fcu",[...],491283,653])
+                        // so let's see whether the prev. one would be ok:
+                        int seq2 = data.at(data.count()-2).toInt();
+                        if (_seqLast != seq2) {
+                            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "sequence mismatch. got" << sequence << "expected" << _seqLast << data;
+                            _seqLast = sequence;
+                            // todo we're out of sequence. now e.g. re-subscribe all books/trades
+                        } else
+                            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "had to use fallback seq2" << seq2 << data;
+                    }
+                }
+
             auto it = _subscribedChannels.find(channelId);
             if (it != _subscribedChannels.end()) {
                 if ((*it).second->handleChannelData(data))

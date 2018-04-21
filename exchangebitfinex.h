@@ -61,6 +61,7 @@ private:
     bool sendAuth(const QString &apiKey, const QString &skey);
     void parseJson(const QString &msg);
     void handleAuthEvent(const QJsonObject &obj);
+    void handleConfEvent(const QJsonObject &obj);
     void handleInfoEvent(const QJsonObject &obj);
     void handleSubscribedEvent(const QJsonObject &obj);
     void handleUnsubscribedEvent(const QJsonObject &obj);
@@ -72,6 +73,7 @@ private:
     QJsonObject _accountSummary;
 
     QWebSocket _ws;
+    int _seqLast; // last seq of ws channels
     QTimer _checkConnectionTimer;
     ChannelAccountInfo _accountInfoChannel;
     std::map<int, std::shared_ptr<Channel>> _subscribedChannels;
