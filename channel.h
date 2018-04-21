@@ -25,6 +25,9 @@ public:
     virtual bool handleDataFromHitbtc(const QJsonObject &data, bool complete); // complete = snapshot
     virtual QString getStatusMsg() const { return QString("Channel %1 (%2 %3):").arg(_channel).arg(_isSubscribed ? "s" : "u").arg(_isTimeout ? "TO" : "OK"); }
 
+    virtual void unsubscribed(); // to signal that the channel is currently unsub and won't receive further data
+    virtual void subscribed(); // to signal that data will come again
+
     const QString &channel() const { return _channel; }
     const QString &pair() const { return _pair; }
     const QString &symbol() const { return _symbol; }
@@ -37,7 +40,6 @@ signals:
     void dataUpdated();
     void timeout(int id, bool isTimeout);
 public slots:
-
 protected:
     Exchange *_exchange;
     void timerEvent(QTimerEvent *event) override;
@@ -76,6 +78,7 @@ public:
     };
 
     void printAsksBids() const;
+    virtual void unsubscribed() override; // to signal that the channel is currently unsub and won't receive further data -> delete book data
 protected:
     void handleSingleEntry(const double &p, const int &c, const double &a);
     typedef std::map<double, BookItem, bool(*)(const double&, const double&)> BookItemMap;

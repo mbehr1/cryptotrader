@@ -307,7 +307,23 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
                                         const std::map<QString, QString> &options) // todo add string list/pair with further options
 {
     if (!_isConnected) return false;
-    // check whether we are subscribed already? todo
+    // check whether we are subscribed already?
+    for (auto &schan : _subscribedChannels) {
+        auto &ch = schan.second;
+        if (ch->channel() == channel &&
+                ch->symbol() == symbol) {
+            int idOld = ch->id();
+            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "found old channel" << (ch->_isSubscribed ? QStringLiteral("unsubscribing...") : QStringLiteral("but is not subscribed"));
+            if (ch->_isSubscribed) {
+                // we let the unsubscribe event set the _isSubscribed=false
+                QString unsubMsg(QString("{\"event\": \"unsubscribe\", \"chanId\": %1 }").arg(idOld));
+                qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "unsubMsg=" << unsubMsg;
+                _ws.sendTextMessage(unsubMsg);
+            }
+            break;
+        }
+    }
+
     QString innerMsg(QString("\"event\": \"subscribe\", \"channel\": \"%1\", \"symbol\": \"%2\"").arg(channel, symbol));
     for (auto it : options) {
         innerMsg.append(QString(", \"%1\": \"%2\"").arg(it.first, it.second));
@@ -451,7 +467,10 @@ void ExchangeBitfinex::parseJson(const QString &msg)
                         if (evVString.compare("auth")==0) {
                             handleAuthEvent(obj);
                         } else
-                            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "TODO unknown event:" << evValue.toString() << obj;
+                            if (evVString.compare("unsubscribed")==0) {
+                                handleUnsubscribedEvent(obj);
+                            } else
+                                qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "TODO unknown event:" << evValue.toString() << obj;
         } else {
             // no event
             qCWarning(CeBitfinex) << "TODO unknown (no event) json object:" << obj;
@@ -558,6 +577,22 @@ void ExchangeBitfinex::handleInfoEvent(const QJsonObject &obj)
 
 }
 
+void ExchangeBitfinex::handleUnsubscribedEvent(const QJsonObject &obj)
+{
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
+    int chanId = obj["chanId"].toInt();
+    QString status = obj["status"].toString();
+
+    if (chanId>0) {
+        const auto &it = _subscribedChannels.find(chanId);
+        if (it != _subscribedChannels.cend()) {
+            auto &ch = (*it).second;
+            ch->unsubscribed();
+            // we don't delete the channel. there might be a reuse on next subscribe
+        }
+    }
+}
+
 void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
 {
     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
@@ -566,6 +601,10 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
         QString channel = obj["channel"].toString();
         QString symbol = obj["symbol"].toString();
         QString pair = obj["pair"].toString();
+        QString status = obj["status"].toString();
+        if (status.length() && status != QStringLiteral("OK")) // for now just a warning. later change to accept only OK
+            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "status=" << status << obj;
+
         if (channelId > 0 && channel.length() && symbol.length()) {
             // first we check whether this channel exists already but with a different id (reconnect case)
             for (auto &schan : _subscribedChannels) {
@@ -579,6 +618,7 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
                         _subscribedChannels.insert(std::make_pair(channelId, ch));
                         _subscribedChannels.erase(idOld);
                     }
+                    ch->subscribed();
                     return;
                 }
             }
@@ -587,7 +627,7 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
             auto it = _subscribedChannels.find(channelId);
             if (it!= _subscribedChannels.end()) {
                 qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "channel" << channelId << "exists already. Deleting existing.";
-                (*it).second->_isSubscribed = false;
+                (*it).second->unsubscribed();
                 // todo emit signal that this channel is deleted!
                 _subscribedChannels.erase(it);
             }
@@ -602,9 +642,12 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
                     ptr = std::make_shared<ChannelTrades>(this, channelId, symbol, pair);
                 else
                     ptr = std::make_shared<Channel>(this, channelId, channel, symbol, pair);
+            ptr->subscribed();
             _subscribedChannels.insert(std::make_pair(channelId, ptr));
             emit newChannelSubscribed(ptr);
             connect(&(*ptr), SIGNAL(timeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
+            // todo for test only do a subscribe again:
+            subscribeChannel(channel, symbol);
         } else
             if (channelId == 0) { // account info
                 qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "account info" << obj;

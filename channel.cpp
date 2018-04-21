@@ -42,6 +42,21 @@ Channel::~Channel()
     qCDebug(Cchannel) << __PRETTY_FUNCTION__ << _id;
 }
 
+void Channel::subscribed()
+{
+    qCDebug(Cchannel) << __PRETTY_FUNCTION__ << "was subscribed=" << _isSubscribed;
+    if (!_isSubscribed) {
+        _isSubscribed = true;
+        _lastMsg = QDateTime::currentDateTime();
+    }
+}
+
+void Channel::unsubscribed()
+{
+    qCDebug(Cchannel) << __PRETTY_FUNCTION__ << "was subscribed=" << _isSubscribed;
+    _isSubscribed = false;
+}
+
 bool Channel::handleChannelData(const QJsonArray &data)
 {
     //qCDebug(Cchannel) << __FUNCTION__ << data;
@@ -178,6 +193,17 @@ bool ChannelBooks::handleChannelData(const QJsonArray &data)
         emit dataUpdated();
         return true;
     } else return false;
+}
+
+
+void ChannelBooks::unsubscribed()
+{
+    qCDebug(Cchannel) << __PRETTY_FUNCTION__;
+    Channel::unsubscribed();
+    // delete book data:
+    _bids.clear();
+    _asks.clear();
+    _bitFlyerGotSnapshot = false;
 }
 
 bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
