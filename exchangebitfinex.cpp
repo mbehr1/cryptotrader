@@ -681,11 +681,13 @@ void ExchangeBitfinex::handleChannelData(const QJsonArray &data)
     //qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << data;
     if (!data.isEmpty()) {
         // we expect at least the channel id and one action
-        if (data.count() >= 2) {
+        const auto dCount = data.count();
+        if (dCount >= 2) {
             auto channelId = data.at(0).toInt();
 
             // sequence is the last element in the array
-            int sequence = data.at(data.count()-1).toInt();
+            int sequence = channelId ? data.at(dCount-1).toInt() :
+                                       data.at(dCount > 3 ? 3 : dCount-1).toInt(); // for auth channel seq id is at 4th pos, except for "hb"
             //qDebug(CeBitfinex) << "sequence=" << sequence << channelId;
 
                 if (_seqLast<0)
@@ -693,16 +695,9 @@ void ExchangeBitfinex::handleChannelData(const QJsonArray &data)
                 else {
                     // compare, we expect sequence to be = _seqLast+1
                     if (++_seqLast != sequence) {
-                        // sometimes there is some weird (unknown) other data:
-                        // sequence mismatch. got 653 expected 491283 QJsonArray([0,"fcu",[...],491283,653])
-                        // so let's see whether the prev. one would be ok:
-                        int seq2 = data.at(data.count()-2).toInt();
-                        if (_seqLast != seq2) {
-                            qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "sequence mismatch. got" << sequence << "expected" << _seqLast << data;
-                            _seqLast = sequence;
-                            // todo we're out of sequence. now e.g. re-subscribe all books/trades
-                        } else
-                            qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "had to use fallback seq2" << seq2 << data;
+                        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "sequence mismatch. got" << sequence << "expected" << _seqLast << data;
+                        _seqLast = sequence;
+                        // todo we're out of sequence. now e.g. re-subscribe all books/trades
                     }
                 }
 
