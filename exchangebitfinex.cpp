@@ -646,8 +646,6 @@ void ExchangeBitfinex::handleSubscribedEvent(const QJsonObject &obj)
             _subscribedChannels.insert(std::make_pair(channelId, ptr));
             emit newChannelSubscribed(ptr);
             connect(&(*ptr), SIGNAL(timeout(int, bool)), this, SLOT(onChannelTimeout(int, bool)));
-            // todo for test only do a subscribe again:
-            subscribeChannel(channel, symbol);
         } else
             if (channelId == 0) { // account info
                 qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "account info" << obj;
