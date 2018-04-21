@@ -434,6 +434,13 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                                         qCDebug(CsArb) << "too low order value for" << eBuy._name << eBuy._pair << rAmountBuyCur1 << rPriceBuy << minOrderValue;
                                     }
                                 }
+
+                                // sanity check if any of the prices is 0:
+                                if (rPriceSell == 0.0 || rPriceBuy == 0.0) {
+                                    qCWarning(CsArb) << "price 0 on buy/sell" << rPriceBuy << rPriceSell;
+                                    tooLowOrderValue = true;
+                                }
+
                                 if (!tooLowOrderValue) {
                                     QString str;
 
