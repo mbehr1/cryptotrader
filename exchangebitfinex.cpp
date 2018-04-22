@@ -192,6 +192,14 @@ void ExchangeBitfinex::onDisconnected()
         disconnect(&_ws, &QWebSocket::textMessageReceived,
                    this, &ExchangeBitfinex::onTextMessageReceived);
     }
+    // mark all channels as unsubscribed. this avoids error from unsubcribe at subscribe
+    for (auto &schan : _subscribedChannels) {
+        auto &ch = schan.second;
+        if (ch && ch->_isSubscribed) {
+            ch->unsubscribed();
+        }
+    }
+    _accountInfoChannel.unsubscribed();
     _checkConnectionTimer.start(1000); // todo check reconnect behaviour
 }
 
@@ -472,6 +480,9 @@ void ExchangeBitfinex::parseJson(const QString &msg)
                             if (evVString.compare("unsubscribed")==0) {
                                 handleUnsubscribedEvent(obj);
                             } else
+                                if (evVString.compare("error")==0) {
+                                    handleErrorEvent(obj);
+                                } else
                                 qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << "TODO unknown event:" << evValue.toString() << obj;
         } else {
             // no event
@@ -485,6 +496,12 @@ void ExchangeBitfinex::parseJson(const QString &msg)
             qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "json neither object nor array!" << json;
         }
 
+}
+
+void ExchangeBitfinex::handleErrorEvent(const QJsonObject &obj)
+{
+    qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
+    // ignore those. they are from reconnect handling QJsonObject({"chanId":156,"code":10400,"event":"error","msg":"unsubscribe: invalid"})
 }
 
 void ExchangeBitfinex::handleConfEvent(const QJsonObject &obj)
@@ -505,6 +522,8 @@ void ExchangeBitfinex::handleAuthEvent(const QJsonObject &obj)
 {
     qCDebug(CeBitfinex) << __PRETTY_FUNCTION__ << obj;
     _isAuth = obj["status"]=="OK";
+    if (_isAuth)
+        _accountInfoChannel.subscribed();
 
     // todo send this to ChannelAccountInfo?
 

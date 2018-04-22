@@ -65,6 +65,7 @@ private:
     void handleInfoEvent(const QJsonObject &obj);
     void handleSubscribedEvent(const QJsonObject &obj);
     void handleUnsubscribedEvent(const QJsonObject &obj);
+    void handleErrorEvent(const QJsonObject &obj);
     void handleChannelData(const QJsonArray &data);
     bool getSymbolDetails();
     QJsonArray _symbolDetails;

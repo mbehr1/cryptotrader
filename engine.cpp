@@ -695,9 +695,10 @@ void Engine::onNewMessage(uint64_t id, Telegram::Message msg)
         }
         else
         if (msg.string.compare("status")==0) {
-            for (auto &exchange : _exchanges)
-                _telegramBot->sendMessage(msg, exchange.second->getStatusMsg(), false, false, msg.id);
-
+            for (auto &exchange : _exchanges) {
+                if (exchange.second)
+                    _telegramBot->sendMessage(msg, exchange.second->getStatusMsg(), false, false, msg.id);
+            }
             for (auto &strategy : _strategies) {
                 if (strategy) {
                     QString status = strategy->getStatusMsg();
@@ -721,7 +722,7 @@ void Engine::onNewMessage(uint64_t id, Telegram::Message msg)
         else
         if (msg.string.compare("reconnect")==0) {
             for (auto &exchange : _exchanges)
-                exchange.second->reconnect();
+                if (exchange.second) exchange.second->reconnect();
             _telegramBot->sendMessage(msg, QString("*reconnecting*..."), true, false, msg.id);
         }
         else
