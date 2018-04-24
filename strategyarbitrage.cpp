@@ -389,6 +389,10 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                                     rAmountSellCur1 = minTemp;
                                     rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor);
                                 }
+                            } else {
+                                qCWarning(CsArb) << "getAvailable eSell failed!" << eSell._name << eSell._cur1;
+                                rAmountSellCur1 = 0.0;
+                                rAmountBuyCur1 = 0.0;
                             }
 
                             if (eBuy._book->exchange()->getMinAmount(eBuy._pair, minTemp)) {
@@ -409,6 +413,10 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                                         rAmountSellCur1 = 0.0;
                                     }
                                 }
+                            } else {
+                                qCWarning(CsArb) << "getAvailable eBuy failed!" << eBuy._name << eBuy._cur2;
+                                rAmountSellCur1 = 0.0;
+                                rAmountBuyCur1 = 0.0;
                             }
 
                             /*
