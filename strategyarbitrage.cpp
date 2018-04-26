@@ -311,7 +311,10 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         // get expected fee factors:
                         double sumFeeFactor = 0.0;
                         double feeCur1= 0.0;
-                        double feeCur2 = feeCur1;
+                        double feeCur2 = 0.0;
+                        double sellFeeFactor = 0.002; // which fee factor does come on top of what we sell.
+                        // -> we can't sell all but only so that sell*(1.0+sellFee) <= available
+
                         if (eBuy._e->getFee(true, eBuy._pair, feeCur1, feeCur2, maxAmountBuy, false)){
                             sumFeeFactor += feeCur1;
                             sumFeeFactor += feeCur2;
@@ -320,6 +323,7 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                         feeCur1 = 0.0; feeCur2 = 0.0;
                         if (eSell._e->getFee(false, eSell._pair, feeCur1, feeCur2, maxAmountSell, false)){
                             sumFeeFactor += feeCur1;
+                            sellFeeFactor = feeCur1;
                             sumFeeFactor += feeCur2;
                             if (feeCur1 > 0.0)
                                 maxAmountSell /= (1.0+feeCur1); // we can't sell all as some part will be needed as fee
@@ -384,9 +388,9 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             }
                             // check if really enough cur1 is available on eSell:
                             if (eSell._book->exchange()->getAvailable(eSell._cur1, minTemp)) {
-                                if (rAmountSellCur1 >= minTemp) {
+                                if (((double)rAmountSellCur1*(1.0+sellFeeFactor)) >= minTemp) {
                                     qCDebug(CsArb) << "reduced amount to sell due to not enough available from" << (QString)rAmountSellCur1 << "to" << minTemp << eSell._name;
-                                    rAmountSellCur1 = minTemp;
+                                    rAmountSellCur1 = sellFeeFactor != 0.0 ? (minTemp / (1.0001 + sellFeeFactor)) : minTemp; // 1.0001 to round the fee a little higher. todo better: use minIncrement and keep that min amount
                                     rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor);
                                 }
                             } else {
