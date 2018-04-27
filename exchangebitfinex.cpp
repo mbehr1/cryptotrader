@@ -134,7 +134,7 @@ bool ExchangeBitfinex::getMinAmount(const QString &pair, double &oAmount) const
     {
         if (symb.isObject()) {
             const QJsonObject &sym = symb.toObject();
-            if (sym["pair"].toString().toLower() == lowerPair) {
+            if (lowerPair.endsWith(sym["pair"].toString().toLower())) {
                 oAmount = sym["minimum_order_size"].toString().toDouble();
                 return true;
             }
@@ -399,6 +399,9 @@ bool ExchangeBitfinex::getSymbolDetails()
                             qCDebug(CeBitfinex) << "min amount for XMRBTC=" << minAmount << d;
                             qCDebug(CeBitfinex) << "getRounding(XMRBTC, price)" << getRounding("XMRBTC", true);
                             qCDebug(CeBitfinex) << "getRounding(XMRBTC, amount)" << getRounding("XMRBTC", false);
+                           minAmount = -1.0;
+                           (void)getMinAmount("tBCHBTC", minAmount);
+                           qCDebug(CeBitfinex) << "min amount for tBCHBTC=" << minAmount << d;
                             })) {
         qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
         return false;
