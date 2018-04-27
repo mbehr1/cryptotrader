@@ -316,7 +316,7 @@ void ExchangeBitFlyer::triggerGetHealth()
                                     QString health = d.object()["status"].toString();
                                     if (health != _health) {
                                        // qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "got health=" << health; // NORMAL, BUSY, VERY BUSY, SUPER BUSY, STOP
-                                       bool wasMaintenance = health.compare("STOP")==0;
+                                       bool wasMaintenance = _health.compare("STOP")==0;
                                        bool wasStopped = wasMaintenance;
                                        bool first = _health.length() == 0;
                                        _health = health;

@@ -389,9 +389,10 @@ void StrategyArbitrage::timerEvent(QTimerEvent *event)
                             // check if really enough cur1 is available on eSell:
                             if (eSell._book->exchange()->getAvailable(eSell._cur1, minTemp)) {
                                 if (((double)rAmountSellCur1*(1.0+sellFeeFactor)) >= minTemp) {
-                                    qCDebug(CsArb) << "reduced amount to sell due to not enough available from" << (QString)rAmountSellCur1 << "to" << minTemp << eSell._name;
-                                    rAmountSellCur1 = sellFeeFactor != 0.0 ? (minTemp / (1.0001 + sellFeeFactor)) : minTemp; // 1.0001 to round the fee a little higher. todo better: use minIncrement and keep that min amount
+                                    QString oldB = (QString)rAmountSellCur1;
+                                    rAmountSellCur1 = sellFeeFactor != 0.0 ? (minTemp / (1.002 + sellFeeFactor)) : minTemp; // 1.002 to round the fee a little higher. todo better: use minIncrement and keep that min amount
                                     rAmountBuyCur1 = rAmountSellCur1 * (1.0 + sumFeeFactor);
+                                    qCDebug(CsArb) << "reduced amount to sell due to not enough available from" << oldB << "to" << (QString)rAmountSellCur1 << eSell._name;
                                 }
                             } else {
                                 qCWarning(CsArb) << "getAvailable eSell failed!" << eSell._name << eSell._cur1;
