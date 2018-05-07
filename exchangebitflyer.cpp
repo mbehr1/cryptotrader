@@ -198,6 +198,11 @@ bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount) const
         oAmount = 0.01;
         return true;
     }
+
+    if (pair.endsWith("BTC")) { // todo announcement was min order size 0.01 BTC. do they mean value?
+        oAmount = 0.01;
+        return true;
+    }
     return false; // currently we don't know
 }
 
@@ -788,7 +793,7 @@ int ExchangeBitFlyer::newOrder(const QString &symbol, const double &amount, cons
     params.insert("side", amount >= 0.0 ? "BUY" : "SELL");
     params.insert("price", priceRounded);
     params.insert("size", QString("%1").arg(amount >= 0.0 ? amount : -amount, 0, 'f', 5));
-    params.insert("minute_to_expire", 24*60); // let's expire by default in 24h
+    params.insert("minute_to_expire", 5*24*60); // let's expire by default in 5x24h (5d)
 
     QByteArray body = QJsonDocument(params).toJson(QJsonDocument::Compact);
 
