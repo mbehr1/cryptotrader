@@ -604,6 +604,7 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
                 bool active = (*it).second["child_order_state"].toString().compare("ACTIVE")==0;
 
                 if (!active) {
+                    // qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found non active order" << "cid=" << id;
                     // check for pending orders:
                     auto pit = _pendingOrdersMap.find(id);
                     if (pit != _pendingOrdersMap.end()) {
