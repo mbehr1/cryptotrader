@@ -13,19 +13,14 @@ TEMPLATE = app
 
 include($$PWD/lib/QtTelegramBot/QtTelegramBot.pri)
 
-INCLUDEPATH += $$PWD/lib/PubNubQtSync/PubNubQtSync
-INCLUDEPATH += $$PWD/lib/PubNubQtSync/c-core/core
-DEPENDPATH += $$PWD/lib/PubNubQtSync/c-core/core
-HEADERS += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.h \
-    tradestrategy.h \
+HEADERS += tradestrategy.h \
     strategyexchgdelta.h \
     exchangebinance.h \
     exchangenam.h \
     strategyarbitrage.h \
     exchangehitbtc.h \
     roundingdouble.h
-SOURCES += $$PWD/lib/PubNubQtSync/PubNubQtSync/pubnub_qt.cpp $$PWD/lib/PubNubQtSync/c-core/core/pubnub_ccore.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_assert_std.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_json_parse.c $$PWD/lib/PubNubQtSync/c-core/core/pubnub_helper.c \
-    tradestrategy.cpp \
+SOURCES += tradestrategy.cpp \
     strategyexchgdelta.cpp \
     exchangenam.cpp \
     exchangebinance.cpp \

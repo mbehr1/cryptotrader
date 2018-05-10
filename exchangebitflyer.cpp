@@ -7,7 +7,6 @@
 #include <QNetworkReply>
 #include <QDateTime>
 #include <QMessageAuthenticationCode>
-#include "pubnub_qt.h"
 #include "exchangebitflyer.h"
 
 /* todo
@@ -15,17 +14,21 @@
  * implement MACD(10,26,9)
 */
 
-extern "C" {
-#include "pubnub_helper.h"
-}
-
-Q_LOGGING_CATEGORY(CbitFlyer, "e.bitFlyer")
+Q_LOGGING_CATEGORY(CbitFlyer, "e.bitflyer") // we use lower case for logging
 
 ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObject *parent) :
     ExchangeNam(parent, "cryptotrader_exchangebitflyer")
-  , _nrChannels(0)
+  , _wsLastPong(0), _nrChannels(0), _lastOnline(false), _nextJsonRpcId(1)
 {
     qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << name();
+
+    assert(connect(&_ws, &QWebSocket::connected, this, &ExchangeBitFlyer::onWsConnected));
+    assert(connect(&_ws, &QWebSocket::disconnected, this, &ExchangeBitFlyer::onWsDisconnected));
+    typedef void (QWebSocket:: *sslErrorsSignal)(const QList<QSslError> &);
+    assert(connect(&_ws, static_cast<sslErrorsSignal>(&QWebSocket::sslErrors), this, &ExchangeBitFlyer::onWSSslErrors));
+    assert(connect(&_ws, SIGNAL(textMessageReceived(QString)), this, SLOT(onWsTextMessageReceived(QString))));
+    assert(connect(&_ws, SIGNAL(pong(quint64,QByteArray)), this, SLOT(onWsPong(quint64, QByteArray))));
+    assert(connect(&_ws, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWsError(QAbstractSocket::SocketError))));
 
     // snapshot seems to come every 240s
     _subscribedChannelNames["FX_BTC_JPY"] = "lightning_board_FX_BTC_JPY,lightning_executions_FX_BTC_JPY";
@@ -48,7 +51,7 @@ ExchangeBitFlyer::ExchangeBitFlyer(const QString &api, const QString &skey, QObj
 
     // take care. Symbol must not start with "f" (hack isFunding... inside Channel...)
 
-    connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer()));
+    assert(connect(&_queryTimer, SIGNAL(timeout()), this, SLOT(onQueryTimer())));
 
     _queryTimer.setSingleShot(false);
     _queryTimer.start(5000); // each 5s
@@ -61,7 +64,7 @@ bool ExchangeBitFlyer::addPair(const QString &pair)
 
     auto chb = std::make_shared<ChannelBooks>(this, ++_nrChannels,
                                               pair);
-    chb->setTimeoutIntervalMs(5*60000); // 5m timeout for bitflyer
+    chb->setTimeoutIntervalMs(15000); // 15s timeout for bitflyer
     connect(&(*chb), SIGNAL(timeout(int, bool)),
             this, SLOT(onChannelTimeout(int,bool)));
 
@@ -72,22 +75,12 @@ bool ExchangeBitFlyer::addPair(const QString &pair)
             this, SLOT(onChannelTimeout(int,bool)));
     _subscribedChannels[pair] = std::make_pair(chb, ch);
 
-    auto timer = std::make_shared<QTimer>(this);
-    timer->setSingleShot(true);
-    // connect(timer.get(), SIGNAL(timeout()),this, SLOT(onTimerTimeout()));
-    connect(timer.get(), &QTimer::timeout, this, [this, pair]{onTimerTimeout(pair);});
 
-    QString pubKey;
-    QString keySub = "sub-c-52a9ab50-291b-11e5-baaa-0619f8945a4f";
-    auto pn = std::make_shared<pubnub_qt>(pubKey, keySub);
+    if (_isConnected) {
+        // Send subscribe msg here:
+        return sendSubscribeMsg(pair);
+    }
 
-    connect(&(*pn), &pubnub_qt::outcome, this, [this, pair](pubnub_res res){ onPnOutcome(res, pair);} );
-
-    qCDebug(CbitFlyer) << "pubnub origin=" << pn->origin() << pair;
-    auto res = pn->subscribe(_subscribedChannelNames[pair]);
-    qCDebug(CbitFlyer) << "subscribe " << pair << " res=" << res << "success=" << (res==PNR_STARTED);
-
-    _pns[pair] = std::make_pair(pn, timer);
     return true;
 }
 
@@ -133,12 +126,11 @@ void ExchangeBitFlyer::storePendingOrders()
 ExchangeBitFlyer::~ExchangeBitFlyer()
 {
     qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << name();
-    // stop all timer:
-    for (auto &pn : _pns) {
-        if (pn.second.second)
-            pn.second.second->stop();
-    }
+    disconnectWS();
+
     _queryTimer.stop();
+    disconnect(&_ws, &QWebSocket::disconnected, this, &ExchangeBitFlyer::onWsDisconnected);
+
     storePendingOrders(); // should be called on change anyhow but to be on the safe side
 }
 
@@ -208,6 +200,9 @@ bool ExchangeBitFlyer::getMinAmount(const QString &pair, double &oAmount) const
 
 void ExchangeBitFlyer::onQueryTimer()
 { // keep limit 100/min!
+
+    checkConnectWS();
+
     triggerGetHealth();
     triggerGetBalance();
     triggerGetOrders("FX_BTC_JPY");
@@ -233,39 +228,148 @@ void ExchangeBitFlyer::onChannelTimeout(int id, bool isTimeout)
     emit channelTimeout(name(), id, isTimeout);
 }
 
-void ExchangeBitFlyer::onPnOutcome(pubnub_res result, const QString &pair)
+void ExchangeBitFlyer::checkConnectWS()
 {
-    auto &pn = _pns[pair];
-    assert(pn.first && pn.second);
-    if (result == PNR_OK) {
-        _isConnected = true;
-        auto msgs = pn.first->get_all();
-        for (auto &msg : msgs) {
-            processMsg(pair, msg);
-        }
-        auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
-        if (res != PNR_STARTED) {
-            qCDebug(CbitFlyer) << pair << "subscribe res=" << res << pubnub_res_2_string(res);
-            pn.second->start(500); // try again in 500ms
-        }
+    if (!_isConnected) {
+        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "connecting to ws";
+        QString url = QString("wss://ws.lightstream.bitflyer.com/json-rpc");
+        _ws.open(QUrl(url));
     } else {
-        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << result << pubnub_res_2_string(result) << pn.first->last_http_code();
-        if (result != PNR_STARTED)
-            pn.second->start(500); // try again in 500ms
-        else qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << pair << result << "PNR_STARTED. Didn't retrigger timer!";
+        const auto curTimeMs = QDateTime::currentMSecsSinceEpoch();
+        _ws.ping();
+        if (_wsLastPong && (curTimeMs - _wsLastPong > 12*1000)) {
+            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "no pong from ws since" << (curTimeMs - _wsLastPong) << "ms";
+            _ws.close(QWebSocketProtocol::CloseCodeGoingAway);
+            _isConnected = false;
+        }
+    }
+    // connection change?
+    bool curOnline = _isConnected && _isAuth;
+    if (curOnline != _lastOnline) {
+        emit exchangeStatus(name(), !curOnline, !curOnline);
+        _lastOnline = curOnline;
+        qCDebug(CbitFlyer) << "exchangeStatus changed to" << _lastOnline;
     }
 }
 
-void ExchangeBitFlyer::onTimerTimeout(const QString &pair)
+bool ExchangeBitFlyer::sendSubscribeMsg(const QString &pair)
 {
-    auto &pn = _pns[pair];
-    assert(pn.first && pn.second);
-    auto msgs = pn.first->get_all();
-    for (auto &msg : msgs) {
-        processMsg(pair, msg);
+    QString msg = QString("{\"method\":\"subscribe\", \"id\":%1, \"params\":{\"channel\":\"%2\"} }");
+//    _subscribedChannelNames["BCH_BTC"] = "lightning_board_snapshot_BCH_BTC,lightning_board_BCH_BTC,lightning_ticker_BCH_BTC,lightning_executions_BCH_BTC"; // let's try using the ticker only. so we get just the first ask/bid
+
+    QString msg1 = msg.arg(_nextJsonRpcId++).arg(QString("lightning_board_snapshot_%1").arg(pair));
+    //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << msg1;
+
+    QString msg2 = msg.arg(_nextJsonRpcId++).arg(QString("lightning_board_%1").arg(pair));
+    //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << msg2;
+
+    QString msg3 = msg.arg(_nextJsonRpcId++).arg(QString("lightning_executions_%1").arg(pair));
+    //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << msg3;
+
+    QString msg4 = msg.arg(_nextJsonRpcId++).arg(QString("lightning_ticker_%1").arg(pair));
+    //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << pair << msg4;
+
+    if (!_ws.sendTextMessage(msg1)) return false;
+    if (!_ws.sendTextMessage(msg2)) return false;
+    if (!_ws.sendTextMessage(msg3)) return false;
+    if (!_ws.sendTextMessage(msg4)) return false;
+
+    return true;
+}
+
+void ExchangeBitFlyer::onWSSslErrors(const QList<QSslError> &errors)
+{
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__;
+    for (const auto &err : errors) {
+        qCDebug(CbitFlyer) << " " << err.errorString() << err.error();
     }
-    auto res = pn.first->subscribe(_subscribedChannelNames[pair]);
-    qCDebug(CbitFlyer) << "subscribe " << pair << " res=" << res << "success=" << pubnub_res_2_string(res);
+}
+
+void ExchangeBitFlyer::disconnectWS()
+{
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected)
+        _ws.close();
+}
+
+void ExchangeBitFlyer::onWsConnected()
+{
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << _isConnected;
+    if (_isConnected) return;
+    _isConnected = true;
+    _wsLastPong = 0;
+
+    // subscribe here:
+    auto it = _subscribedChannelNames.cbegin();
+    while (it != _subscribedChannelNames.cend()) {
+       sendSubscribeMsg((*it).first);
+        ++it;
+    }
+    bool curOnline = _isConnected && _isAuth;
+    if (curOnline != _lastOnline) {
+        emit exchangeStatus(name(), !curOnline, !curOnline);
+        _lastOnline = curOnline;
+        qCDebug(CbitFlyer) << "exchangeStatus changed to" << _lastOnline;
+    }
+
+}
+
+void ExchangeBitFlyer::onWsDisconnected()
+{
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << _isConnected << _ws.closeReason();
+    if (_isConnected) {
+        _isConnected = false;
+    }
+    bool curOnline = _isConnected && _isAuth;
+    if (curOnline != _lastOnline) {
+        emit exchangeStatus(name(), !curOnline, !curOnline);
+        _lastOnline = curOnline;
+        qCDebug(CbitFlyer) << "exchangeStatus changed to" << _lastOnline;
+    }
+
+}
+
+void ExchangeBitFlyer::onWsPong(quint64 elapsedTime, const QByteArray &payload)
+{
+    if (elapsedTime>100) qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << elapsedTime << payload;
+    (void) elapsedTime;
+    (void) payload;
+    _wsLastPong = QDateTime::currentMSecsSinceEpoch();
+}
+
+void ExchangeBitFlyer::onWsError(QAbstractSocket::SocketError err)
+{
+    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << err;
+}
+
+
+void ExchangeBitFlyer::onWsTextMessageReceived(const QString &msg)
+{
+    //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << msg;
+    QJsonParseError err;
+    QJsonDocument d = QJsonDocument::fromJson(msg.toUtf8(), &err);
+    if (d.isNull() || err.error != QJsonParseError::NoError) {
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "failed to parse" << err.errorString() << err.error << msg;
+    }
+    if (d.isObject()) {
+        const QJsonObject &o = d.object();
+        if (o.contains("result")) {
+            bool res = o["result"].toBool();
+            if (!res) {
+                qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "result=" << o["result"] << o["id"] << o;
+            } // else ignore
+        } else {
+            // QJsonObject({"jsonrpc":"2.0","method":"channelMessage","params":{"channel":"lightning_board_snapshot_FX_BTC_JPY","message":{"asks
+            const QString &method = o["method"].toString();
+            if (method == "channelMessage") {
+                const QJsonObject &params = o["params"].toObject();
+                processMsg(params);
+            }else
+                qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "unhandled method" << method << o;
+        }
+    } else {
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "didnt handle:" << d;
+    }
 }
 
 bool ExchangeBitFlyer::finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData)
@@ -654,79 +758,108 @@ void ExchangeBitFlyer::updateOrders(const QString &pair, const QJsonArray &arr)
 
 }
 
-void ExchangeBitFlyer::processMsg(const QString &pair, const QString &msg)
+void ExchangeBitFlyer::processMsg(const QJsonObject &channelMsg)
 {
-    //qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << pair << msg;
-    // check type of msgs.
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(msg.toLatin1(), &err);
+    //qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << channelMsg;
+    const QString &channel = channelMsg["channel"].toString();
+    const QJsonValue &message = channelMsg["message"];
+
+    // check channel names and extract pair:
+    QString pair;
+    bool isSnapshot = false;
+    bool isBoardUpdate = false;
+    bool isExecutions = false;
+    bool isTicker = true;
+    if (channel.startsWith("lightning_board_snapshot_")) {
+        isSnapshot = true;
+        pair = channel.right(channel.length() - 25);
+    } else if (channel.startsWith("lightning_board_")) {
+        isBoardUpdate = true;
+        pair = channel.right(channel.length() - 16);
+    } else if (channel.startsWith("lightning_executions_")) {
+        isExecutions = true;
+        pair = channel.right(channel.length() - 21);
+    } else if (channel.startsWith("lightning_ticker_")) {
+        isTicker = true;
+        pair = channel.right(channel.length() - 17);
+    }
+    else {
+        qCWarning(CbitFlyer) << "unknown channel!" << channel;
+    }
+
+    if (!pair.length()) {
+        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "got no pair" << channelMsg;
+        return;
+    }
+    const QJsonValue &doc = message;
+
     // starts with midPrice...
-    if (err.error == QJsonParseError::NoError) {
-        if (doc.isObject()) {
-            const QJsonObject &obj = doc.object();
-            if (obj.contains("mid_price") || obj.contains("tick_id")) {
-                auto &ch = _subscribedChannels[pair].first;
-                assert(ch);
-                if (ch) {
-                    ch->handleDataFromBitFlyer(obj);
-                }
-            } else {
-                qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "don't know how to process" << msg << obj;
+    if (doc.isObject() && (isSnapshot || isBoardUpdate || isTicker)) {
+        const QJsonObject &obj = doc.toObject();
+        if (obj.contains("mid_price") || obj.contains("tick_id")) {
+            auto &ch = _subscribedChannels[pair].first;
+            assert(ch);
+            if (ch) {
+                ch->handleDataFromBitFlyer(obj);
             }
         } else {
-            if (doc.isArray()) {
-                const QJsonArray &arr = doc.array();
-                for (const auto &e : arr) {
-                    if (e.isObject()) {
-                        const QJsonObject &obj = e.toObject();
-                        if (obj.contains("side")) {
-                            auto &ch = _subscribedChannels[pair].second;
-                            assert(ch);
-                            if (ch) {
-                                ch->handleDataFromBitFlyer(obj);
-                            }
-                            if (0) { // we use the ones from orders with details on the fee. could use this here as a fallback but this is faster
-                                // check whether our pendingOrders are here:
-                                QString buyId = obj["buy_child_order_acceptance_id"].toString();
-                                QString sellId = obj["sell_child_order_acceptance_id"].toString();
-                                if (buyId.length()){
-                                    auto it = _pendingOrdersMap.find(buyId);
+            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "don't know how to process" << channelMsg << obj;
+        }
+    } else {
+        if (doc.isArray()) {
+            if (!isExecutions) {
+                qCritical(CbitFlyer) << __PRETTY_FUNCTION__ << "unexpected array: " << channelMsg;
+            }
+            const QJsonArray &arr = doc.toArray();
+            for (const auto &e : arr) {
+                if (e.isObject()) {
+                    const QJsonObject &obj = e.toObject();
+                    if (obj.contains("side")) {
+                        auto &ch = _subscribedChannels[pair].second;
+                        assert(ch);
+                        if (ch) {
+                            ch->handleDataFromBitFlyer(obj);
+                        }
+                        if (0) { // we use the ones from orders with details on the fee. could use this here as a fallback but this is faster
+                            // check whether our pendingOrders are here:
+                            QString buyId = obj["buy_child_order_acceptance_id"].toString();
+                            QString sellId = obj["sell_child_order_acceptance_id"].toString();
+                            if (buyId.length()){
+                                auto it = _pendingOrdersMap.find(buyId);
+                                if (it != _pendingOrdersMap.end()) {
+                                    //  on buy: found our pending order as buyid. cid= 14 QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-221326-585479","exec_date":"2017-11-24T22:13:29.1301581Z","id":75526868,"price":940129,"sell_child_order_acceptance_id":"JRF20171125-071316-913089","side":"BUY","size":0.001})
+                                    qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found our pending order as buyid. cid=" << (*it).second << obj;
+                                    double amount = obj["size"].toDouble();
+                                    double price = obj["price"].toDouble();
+                                    QString status = "COMPLETED BUY WO FEE(MARGIN)";
+                                    emit orderCompleted(name(), (*it).second, amount, price, status, pair, 0.0, QString());
+                                    _pendingOrdersMap.erase(it);
+                                    storePendingOrders();
+                                } else {
+                                    it = _pendingOrdersMap.find(sellId);
                                     if (it != _pendingOrdersMap.end()) {
-                                        //  on buy: found our pending order as buyid. cid= 14 QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-221326-585479","exec_date":"2017-11-24T22:13:29.1301581Z","id":75526868,"price":940129,"sell_child_order_acceptance_id":"JRF20171125-071316-913089","side":"BUY","size":0.001})
-                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found our pending order as buyid. cid=" << (*it).second << obj; // todo process
-                                        double amount = obj["size"].toDouble();
+                                        qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found our pending order as sellid. cid=" << (*it).second << obj;
+                                        double amount = -obj["size"].toDouble();
                                         double price = obj["price"].toDouble();
-                                        QString status = "COMPLETED BUY WO FEE(MARGIN)";
+                                        QString status = "COMPLETED SELL WO FEE(MARGIN)";
                                         emit orderCompleted(name(), (*it).second, amount, price, status, pair, 0.0, QString());
                                         _pendingOrdersMap.erase(it);
                                         storePendingOrders();
-                                    } else {
-                                        it = _pendingOrdersMap.find(sellId);
-                                        if (it != _pendingOrdersMap.end()) {
-                                            qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "found our pending order as sellid. cid=" << (*it).second << obj; // todo process
-                                            double amount = -obj["size"].toDouble();
-                                            double price = obj["price"].toDouble();
-                                            QString status = "COMPLETED SELL WO FEE(MARGIN)";
-                                            emit orderCompleted(name(), (*it).second, amount, price, status, pair, 0.0, QString());
-                                            _pendingOrdersMap.erase(it);
-                                            storePendingOrders();
-                                        }
                                     }
                                 }
-
                             }
 
-                            //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "trade=" << obj; //  QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-220553-114701","exec_date":"2017-11-24T22:05:56.4429062Z","id":75525642,"price":939002,"sell_child_order_acceptance_id":"JRF20171125-070447-314624","side":"BUY","size":0.071})
-                        } else
-                            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "don't know how to process a with " << msg << obj;
+                        }
+
+                        //qCDebug(CbitFlyer) << __PRETTY_FUNCTION__ << "trade=" << obj; //  QJsonObject({"buy_child_order_acceptance_id":"JRF20171124-220553-114701","exec_date":"2017-11-24T22:05:56.4429062Z","id":75525642,"price":939002,"sell_child_order_acceptance_id":"JRF20171125-070447-314624","side":"BUY","size":0.071})
                     } else
-                        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "expect e as object" << e << arr;
-                }
-            } else
-                qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "couldn't parse" << msg;
-        }
-    } else
-        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "couldn't parse" << msg << err.error << err.errorString();
+                        qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "don't know how to process a with " << channelMsg << obj;
+                } else
+                    qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "expect e as object" << e << arr;
+            }
+        } else
+            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "couldn't parse" << channelMsg;
+    }
 }
 
 QString ExchangeBitFlyer::getStatusMsg() const

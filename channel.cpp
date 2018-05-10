@@ -30,7 +30,7 @@ void Channel::timerEvent(QTimerEvent *event)
         if (now-last > _timeoutMs) {
             if (!_isTimeout) {
                 _isTimeout = true;
-                qCWarning(Cchannel) << "channel (" << _id << _channel << ") seems stuck!";
+                qCWarning(Cchannel) << "channel (" << _id << _channel << _symbol << _pair << ") seems stuck!";
                 emit timeout(_id, _isTimeout);
             }
         }
@@ -67,7 +67,7 @@ bool Channel::handleChannelData(const QJsonArray &data)
     _lastMsg = QDateTime::currentDateTime(); // or UTC?
     if (_isTimeout) {
         _isTimeout = false;
-        qCWarning(Cchannel) << "channel (" << _id << ") seems back!";
+        qCWarning(Cchannel) << "channel (" << _id << _channel << _symbol << _pair << ") seems back!";
         emit timeout(_id, _isTimeout);
     }
     // todo we might only handle ping alive msgs here. The rest needs to be done by overriden members
@@ -294,7 +294,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
             }
         }
 
-        // check for ticker based updates: this deletes complete orderbook
+        // check for ticker based updates:
         if (data.contains("tick_id")) {
             if (false and _symbol == "BCH_BTC")
                 qCDebug(Cchannel) << __PRETTY_FUNCTION__ << data;
@@ -307,7 +307,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 
             // check whether best_bid is greater than bids?
             while (_bids.begin() != _bids.end() && ( price < _bids.begin()->first)) {
-                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete bids!" << price << _bids.begin()->first;
+                // this is no bug. see below qCDebug(Cchannel) << __PRETTY_FUNCTION__ << _symbol << "ticker needs to delete bids!" << price << _bids.begin()->first;
                 _bids.erase(_bids.begin());
             }
 
@@ -325,7 +325,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
 
             // check whether best_ask is smaller than asks?
             while (_asks.begin() != _asks.end() && ( price > _asks.begin()->first)) {
-                qCDebug(Cchannel) << __PRETTY_FUNCTION__ << "ticker needs to delete asks!" << price << _asks.begin()->first;
+                // this is no bug. ticker can come faster than the channel update qCDebug(Cchannel) << __PRETTY_FUNCTION__ << _symbol  << "ticker needs to delete asks!" << price << _asks.begin()->first;
                 _asks.erase(_asks.begin());
             }
 
@@ -338,7 +338,7 @@ bool ChannelBooks::handleDataFromBitFlyer(const QJsonObject &data)
         }
 
         if (didUpdate) {
-            if (false and _symbol == "BCH_BTC") printAsksBids();
+            if (false && _symbol == "FX_BTC_JPY") printAsksBids();
             emit dataUpdated();
         }
         return true;

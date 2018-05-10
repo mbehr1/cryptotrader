@@ -4,18 +4,16 @@
 #include <map>
 #include <QTimer>
 #include <QNetworkAccessManager>
+#include <QWebSocket>
 #include <QJsonArray>
 #include <QDateTime>
 #include <QLoggingCategory>
 #include "exchangenam.h"
-#include "pubnub_api_types.h"
 #include "channel.h"
 
 static QString bitFlyerName = "bitFlyer";
 
 Q_DECLARE_LOGGING_CATEGORY(CbitFlyer)
-
-class pubnub_qt;
 
 class ExchangeBitFlyer : public ExchangeNam
 {
@@ -44,21 +42,30 @@ public:
     std::shared_ptr<Channel> getChannel(const QString &pair, CHANNELTYPE type) const;
 signals:
 private Q_SLOTS:
-    void onTimerTimeout(const QString &pair);
+    //void onTimerTimeout(const QString &pair);
     void onQueryTimer();
-    void onPnOutcome(pubnub_res result, const QString &pair);
     void onChannelTimeout(int id, bool isTimeout);
-
+    void onWsConnected(); // from _ws
+    void onWsDisconnected(); // _ws
+    void onWSSslErrors(const QList<QSslError> &errors);
+    void onWsTextMessageReceived(const QString &msg);
+    void onWsPong(quint64, const QByteArray &);
+    void onWsError(QAbstractSocket::SocketError);
 
 private:
+    QWebSocket _ws;
+    qint64 _wsLastPong; // abs time in ms from last pong
+
     std::map<QString, QString> _subscribedChannelNames;
-    std::map<QString, std::pair<std::shared_ptr<pubnub_qt>, std::shared_ptr<QTimer>>> _pns; // by pair
+    //todo std::map<QString, std::pair<std::shared_ptr<pubnub_qt>, std::shared_ptr<QTimer>>> _pns; // by pair
     //QTimer _timer;
     QTimer _queryTimer; // triggers cyclic checks for order status,...
     std::map<QString, std::pair<std::shared_ptr<ChannelBooks>, std::shared_ptr<Channel>>> _subscribedChannels;
 
     bool addPair(const QString &pair);
     int _nrChannels; // nr of created channels
+    bool _lastOnline; // _isConnected and _isAuth
+    int _nextJsonRpcId;
 
 
     // dynamic infos:
@@ -71,6 +78,10 @@ private:
 
     virtual bool finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData) override;
 
+    void checkConnectWS();
+    void disconnectWS();
+    bool sendSubscribeMsg(const QString &pair);
+
     void triggerGetHealth();
     void triggerAuth();
     void triggerCheckCommissions(const QString &pair);
@@ -78,7 +89,7 @@ private:
     void triggerGetMargins();
     void triggerGetOrders(const QString &pair);
     void triggerGetExecutions();
-    void processMsg(const QString &pair, const QString &msg);
+    void processMsg(const QJsonObject &channelMsg);
     void updateBalances(const QString &type, const QJsonArray &arr);
     void updateOrders(const QString &pair, const QJsonArray &arr);
 
