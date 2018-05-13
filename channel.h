@@ -33,6 +33,7 @@ public:
     const QString &symbol() const { return _symbol; }
     const Exchange *exchange() const { return _exchange; }
     const QDateTime &lastMsgTime() const { return _lastMsg; }
+    bool hasTimeout() const { return _isTimeout;}
     int id() const { return _id; }
     void setId(int id) { _id = id; }
     void setTimeoutIntervalMs(unsigned timeoutMs) { _timeoutMs = timeoutMs; }

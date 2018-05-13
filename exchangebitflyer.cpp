@@ -225,6 +225,18 @@ std::shared_ptr<Channel> ExchangeBitFlyer::getChannel(const QString &pair, CHANN
 void ExchangeBitFlyer::onChannelTimeout(int id, bool isTimeout)
 {
     qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << id << isTimeout;
+    // if more than one of our books channels have a timeout we do reset the connection:
+    if (isTimeout) {
+        unsigned nrTimeout = 0;
+        for (const auto &chan : _subscribedChannels) {
+            if (chan.second.first && chan.second.first->hasTimeout())
+                ++nrTimeout;
+        }
+        if (_isConnected && (nrTimeout > _subscribedChannels.size()/2)) {
+            qCWarning(CbitFlyer) << __PRETTY_FUNCTION__ << "auto disconnecting and reconnecting due to too many timeouts!" << nrTimeout << _subscribedChannels.size();
+            disconnectWS();
+        }
+    }
     emit channelTimeout(name(), id, isTimeout);
 }
 
