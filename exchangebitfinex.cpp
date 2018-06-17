@@ -74,12 +74,14 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
     (void) amount; // indep for now
     (void) pair; // we ignore it and return same values for all
 
-    if (!_accountSummary.contains("maker_fee") || !_accountSummary.contains("taker_fee")) {
-        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__  << "invalid accountsummary" << _accountSummary;
+    const auto &fees = _accountInfoFees;
+    if (!fees.contains("maker_fees") || !fees.contains("taker_fees")) {
+        qCWarning(CeBitfinex) << __PRETTY_FUNCTION__  << "invalid accountsummary accountInfoFees" << _accountInfoFees;
         return false;
     }
+    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__  << "accountInfos=" << fees << fees["maker_fees"] << fees["taker_fees"];
 
-    double feeFactor = _accountSummary[makerFee ? "maker_fee" : "taker_fee"].toDouble(); //   makerFee ? 0.001 : 0.002;
+    double feeFactor = fees[makerFee ? "maker_fees" : "taker_fees"].toString().toDouble()/100.0; //   makerFee ? 0.001 : 0.002;
     if (buy) {
         feeCur1 = feeFactor;
         feeCur2 = 0.0;
@@ -347,12 +349,12 @@ bool ExchangeBitfinex::subscribeChannel(const QString &channel, const QString &s
 bool ExchangeBitfinex::getAccountSummary()
 {
     QJsonObject o;
-    o["request"] = QStringLiteral("/v1/summary");
+    o["request"] = QStringLiteral("/v1/account_infos"); // QStringLiteral("/v1/summary");
     o["nonce"] = QString("%1").arg(QDateTime::currentMSecsSinceEpoch());
     QJsonDocument d;
     d.setObject(o);
     QByteArray postData(d.toJson());
-    if (!triggerApiRequest("/v1/summary",
+    if (!triggerApiRequest("/v1/account_infos",
                            true, POST, &postData,
                            [this](QNetworkReply *reply) {
                            QByteArray arr = reply->readAll();
@@ -361,15 +363,15 @@ bool ExchangeBitfinex::getAccountSummary()
                                 return;
                             }
                             QJsonDocument d = QJsonDocument::fromJson(arr);
-                            if (d.isObject()) {
-                                _accountSummary = d.object();
+                           if (d.isArray() && d.array()[0].isObject()) {
+                                _accountInfoFees = d.array()[0].toObject();
                                 { // try getFee
                                     double feeCur1 = -1.0, feeCur2 = feeCur1;
                                     (void) getFee(true, "tETHBTC", feeCur1, feeCur2, 1.0, false);
                                     qCDebug(CeBitfinex) << "fee for buy tETHBTC non maker=" << feeCur1 << feeCur2;
                                 }
                             } else
-                                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "can't handle. Expect object" << d;
+                                qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "can't handle. Expect array" << d;
                             })) {
         qCWarning(CeBitfinex) << __PRETTY_FUNCTION__ << "triggerApiRequest failed!";
         return false;

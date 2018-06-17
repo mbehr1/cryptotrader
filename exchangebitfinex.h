@@ -71,7 +71,7 @@ private:
     QJsonArray _symbolDetails;
 
     bool getAccountSummary();
-    QJsonObject _accountSummary;
+    QJsonObject _accountInfoFees;
 
     QWebSocket _ws;
     int _seqLast; // last seq of ws channels
