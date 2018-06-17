@@ -79,7 +79,7 @@ bool ExchangeBitfinex::getFee(bool buy, const QString &pair, double &feeCur1, do
         qCWarning(CeBitfinex) << __PRETTY_FUNCTION__  << "invalid accountsummary accountInfoFees" << _accountInfoFees;
         return false;
     }
-    qCDebug(CeBitfinex) << __PRETTY_FUNCTION__  << "accountInfos=" << fees << fees["maker_fees"] << fees["taker_fees"];
+    //qCDebug(CeBitfinex) << __PRETTY_FUNCTION__  << "accountInfos=" << fees << fees["maker_fees"] << fees["taker_fees"];
 
     double feeFactor = fees[makerFee ? "maker_fees" : "taker_fees"].toString().toDouble()/100.0; //   makerFee ? 0.001 : 0.002;
     if (buy) {
