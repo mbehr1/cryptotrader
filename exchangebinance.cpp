@@ -712,6 +712,15 @@ void ExchangeBinance::onWs2Disconnected()
     qCDebug(CeBinance) << __PRETTY_FUNCTION__ << _isConnectedWs2 << _ws2.closeReason();
     if (_isConnectedWs2) {
         _isConnectedWs2 = false;
+    } else {
+        // we delete our listen key here as well. sometimes we get stuck in an endless loop where we try to
+        // connect to ws but get instant disconnect without being connected. let's see whether
+        // a new listen key fixes that
+        if (_listenKey.length())
+        {
+            _listenKey.clear();
+            qCDebug(CeBinance) << __PRETTY_FUNCTION__ << "deleted listenkey";
+        }
     }
 }
 
