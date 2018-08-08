@@ -178,8 +178,16 @@ void ExchangeHitbtc::checkConnectWs()
     if (!_isConnectedWs) {
         QString url = QString("wss://api.hitbtc.com/api/2/ws");
         _ws.open(QUrl(url));
+        _wsMissedPongs = 0;
     } else {
-        _ws.ping();
+        if (_wsMissedPongs < 3) {
+            if (_wsMissedPongs)
+                qCDebug(CeHitbtc) << __PRETTY_FUNCTION__ << "sending new ping but" << _wsMissedPongs << "already pending.";
+            _ws.ping();
+            ++_wsMissedPongs;
+        } else {
+            reconnect();
+        }
     }
 }
 
@@ -293,6 +301,15 @@ bool ExchangeHitbtc::triggerGetOrderTrades(const QString &orderId, const std::fu
 void ExchangeHitbtc::reconnect()
 {
     qCWarning(CeHitbtc) << __PRETTY_FUNCTION__;
+    _ws.close(QWebSocketProtocol::CloseCodeGoingAway);
+    if (_isConnectedWs)
+    {
+        _isConnectedWs = false;
+        _isConnected = false;
+        _isAuth = false;
+        emit exchangeStatus(name(), false, true);
+    }
+    // rest will be done in timerEvent
 }
 
 void ExchangeHitbtc::onWsSslErrors(const QList<QSslError> &errors)
@@ -578,6 +595,7 @@ void ExchangeHitbtc::onWsPong(quint64 elapsedTime, const QByteArray &payload)
     (void) elapsedTime;
     (void) payload;
     _wsLastPong = QDateTime::currentMSecsSinceEpoch();
+    _wsMissedPongs = 0; // the server must not send a pong for each and can even send it unsolicitated
 }
 
 void ExchangeHitbtc::onWsTextMessageReceived(const QString &msg)

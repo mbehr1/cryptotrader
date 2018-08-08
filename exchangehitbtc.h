@@ -49,6 +49,7 @@ protected:
     int _timerId;
     virtual bool finishApiRequest(QNetworkRequest &req, QUrl &url, bool doSign, ApiRequestType reqType, const QString &path, QByteArray *postData) override;
     QWebSocket _ws;
+    int _wsMissedPongs = 0;
     qint64 _wsLastPong;
     bool _isConnectedWs;
     void checkConnectWs();
